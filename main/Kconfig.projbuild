@@ -1,0 +1,29 @@
+menu "TriMet Station Display"
+
+    config TRIMET_APP_ID
+        string "TriMet appID"
+        default ""
+        help
+            Developer appID from https://developer.trimet.org/appid/registration/.
+            This is a secret: it is stored in sdkconfig, which is git-ignored.
+            Do not put it in sdkconfig.defaults.
+
+    config TRIMET_STOP_IDS
+        string "Stop IDs (comma-separated)"
+        default "10772,10754,7601,7763"
+        help
+            Comma-separated TriMet stop IDs, passed as the Arrivals V2 locIDs
+            parameter. Defaults:
+              10772  NW 10th & Glisan (Streetcar, northbound)
+              10754  NW 11th & Glisan (Streetcar, southbound)
+              7601   Union Station/NW 5th & Glisan MAX (southbound)
+              7763   Union Station/NW 6th & Hoyt MAX (northbound)
+
+    config TRIMET_POLL_INTERVAL_SEC
+        int "Arrivals poll interval (seconds)"
+        range 15 300
+        default 30
+        help
+            How often to request arrivals from TriMet.
+
+endmenu

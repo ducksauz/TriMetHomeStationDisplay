@@ -13,8 +13,9 @@
 - [x] Import the template and confirm it builds
 - [x] Flash to the D1S and confirm it boots (GX screen setting is correct)
 - [x] Confirm the display works with the template's LVGL demo
-- [ ] Confirm touch works
-- [ ] Add a Kconfig menu (or `secrets.h`) for Wi-Fi SSID/password, `appID` and stop IDs
+- [x] Confirm touch works
+- [x] Add a Kconfig menu for `appID`, stop IDs and poll interval (Wi-Fi uses the template's touchscreen setup screen)
+- [ ] Set your `appID` in `idf.py menuconfig`
 
 ## 2. Connectivity
 - [ ] Wi-Fi station connect, with retry/backoff and a status indicator on screen

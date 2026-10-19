@@ -76,7 +76,17 @@ GET https://developer.trimet.org/ws/v2/arrivals?locIDs=<id1,id2,...>&appID=<APP_
 
 ## Configuration
 
-Wi-Fi credentials, the TriMet `appID` and the stop IDs will live in a local, git-ignored config. That will be either a `sdkconfig` set through `idf.py menuconfig` or a `secrets.h`. The exact mechanism will be settled during setup.
+**Wi-Fi** is set up on the device itself, using the template's touchscreen Wi-Fi setup screen. Credentials are stored in NVS and survive reflashing.
+
+**TriMet settings** are set in `idf.py menuconfig` → **TriMet Station Display** (`main/Kconfig.projbuild`):
+
+| Option | Default | Notes |
+|--------|---------|-------|
+| `CONFIG_TRIMET_APP_ID` | *(empty)* | Your TriMet appID. **Secret.** |
+| `CONFIG_TRIMET_STOP_IDS` | `10772,10754,7601,7763` | Sent as `locIDs` |
+| `CONFIG_TRIMET_POLL_INTERVAL_SEC` | `30` | 15–300 s |
+
+Values are saved in `sdkconfig`, which is git-ignored. Never put the appID in `sdkconfig.defaults`, because that file is committed. At boot the firmware logs whether the appID is set, without printing the appID itself.
 
 ## Build & flash
 

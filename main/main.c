@@ -1,6 +1,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "sdkconfig.h"
+#include <string.h>
 #include "bsp_board.h"
 #include "lv_port.h"
 #include "esp_event.h"
@@ -32,6 +34,13 @@ esp_event_loop_handle_t view_event_handle;
 void app_main(void)
 {
     ESP_LOGI("", SENSECAP, VERSION, __DATE__, __TIME__);
+
+    if (strlen(CONFIG_TRIMET_APP_ID) == 0) {
+        ESP_LOGW(TAG, "TriMet appID not set; run 'idf.py menuconfig' > TriMet Station Display");
+    }
+    ESP_LOGI(TAG, "TriMet appID: %s, stops: %s, poll: %ds",
+             strlen(CONFIG_TRIMET_APP_ID) ? "set" : "MISSING",
+             CONFIG_TRIMET_STOP_IDS, CONFIG_TRIMET_POLL_INTERVAL_SEC);
 
     ESP_ERROR_CHECK(bsp_board_init());
     lv_port_init();
