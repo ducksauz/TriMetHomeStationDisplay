@@ -190,3 +190,22 @@ void trimet_format_stop_name(const trimet_arrivals_t *all, uint32_t loc_id, char
     }
     copy_n(buf, len, loc->desc, n);
 }
+
+bool trimet_time_in_window(int now_min, int start_min, int end_min)
+{
+    if (start_min == end_min) {
+        return false;
+    }
+    if (start_min < end_min) {
+        return now_min >= start_min && now_min < end_min;
+    }
+    return now_min >= start_min || now_min < end_min;   /* wraps past midnight */
+}
+
+void trimet_format_time_of_day(int minutes, char *buf, size_t len)
+{
+    int h = (minutes / 60) % 24, m = minutes % 60;
+    int h12 = h % 12 == 0 ? 12 : h % 12;
+
+    snprintf(buf, len, "%d:%02d %s", h12, m, h < 12 ? "AM" : "PM");
+}

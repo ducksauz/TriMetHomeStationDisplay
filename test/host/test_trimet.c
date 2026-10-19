@@ -313,6 +313,40 @@ static void test_select_and_eta(void)
     free(json);
 }
 
+static void test_time_window(void)
+{
+    char buf[16];
+
+    /* 10 PM - 6 AM wraps past midnight. */
+    CHECK(trimet_time_in_window(22 * 60, 22 * 60, 6 * 60));
+    CHECK(trimet_time_in_window(23 * 60 + 59, 22 * 60, 6 * 60));
+    CHECK(trimet_time_in_window(0, 22 * 60, 6 * 60));
+    CHECK(trimet_time_in_window(5 * 60 + 59, 22 * 60, 6 * 60));
+    CHECK(!trimet_time_in_window(6 * 60, 22 * 60, 6 * 60));
+    CHECK(!trimet_time_in_window(12 * 60, 22 * 60, 6 * 60));
+    CHECK(!trimet_time_in_window(21 * 60 + 59, 22 * 60, 6 * 60));
+
+    /* Same-day window. */
+    CHECK(trimet_time_in_window(13 * 60, 12 * 60, 14 * 60));
+    CHECK(!trimet_time_in_window(14 * 60, 12 * 60, 14 * 60));
+    CHECK(!trimet_time_in_window(11 * 60, 12 * 60, 14 * 60));
+
+    /* Empty window. */
+    CHECK(!trimet_time_in_window(0, 0, 0));
+    CHECK(!trimet_time_in_window(600, 600, 600));
+
+    trimet_format_time_of_day(22 * 60, buf, sizeof(buf));
+    CHECK_STR(buf, "10:00 PM");
+    trimet_format_time_of_day(6 * 60, buf, sizeof(buf));
+    CHECK_STR(buf, "6:00 AM");
+    trimet_format_time_of_day(0, buf, sizeof(buf));
+    CHECK_STR(buf, "12:00 AM");
+    trimet_format_time_of_day(12 * 60 + 45, buf, sizeof(buf));
+    CHECK_STR(buf, "12:45 PM");
+    trimet_format_time_of_day(23 * 60 + 15, buf, sizeof(buf));
+    CHECK_STR(buf, "11:15 PM");
+}
+
 int main(void)
 {
     test_fixture();
@@ -325,6 +359,7 @@ int main(void)
     test_badge_color();
     test_parse_id_list();
     test_select_and_eta();
+    test_time_window();
 
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;

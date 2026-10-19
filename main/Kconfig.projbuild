@@ -50,4 +50,14 @@ menu "TriMet Station Display"
             Tapping the middle of the screen also switches pages and restarts
             this timer.
 
+    config TRIMET_TZ
+        string "Time zone (POSIX TZ string)"
+        default "PST8PDT,M3.2.0,M11.1.0"
+        help
+            Local time zone for the clock and night dimming. The default is
+            US Pacific with daylight saving time. Overrides the template's
+            IP-based time zone lookup, which uses a fixed UTC offset that
+            does not follow DST changes. Leave empty to use the template's
+            lookup.
+
 endmenu

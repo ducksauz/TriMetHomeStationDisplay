@@ -88,6 +88,7 @@ GET https://developer.trimet.org/ws/v2/arrivals?locIDs=<id1,id2,...>&appID=<APP_
 | `CONFIG_TRIMET_STREETCAR_STOP_IDS` | `10772,10754` | Streetcar page(s), 2 stops per page; streetcar arrivals only |
 | `CONFIG_TRIMET_MAX_STOP_IDS` | `7601,7763,8339,8378` | MAX page(s), 2 stops per page; light rail only, so shuttle buses are hidden |
 | `CONFIG_TRIMET_PAGE_ROTATE_SEC` | `15` | Time each page is shown, 5–120 s |
+| `CONFIG_TRIMET_TZ` | `PST8PDT,M3.2.0,M11.1.0` | POSIX time zone for the clock and night dimming (US Pacific, with DST) |
 | `CONFIG_TRIMET_POLL_INTERVAL_SEC` | `30` | 15–300 s |
 
 Streetcar and MAX stops together can total at most 8. Values are saved in `sdkconfig`, which is git-ignored. Changing a default in `Kconfig.projbuild` doesn't update an existing `sdkconfig`; change the value in menuconfig as well. Never put the appID in `sdkconfig.defaults`, because that file is committed. At boot the firmware logs whether the appID is set, without printing the appID itself.
@@ -100,7 +101,8 @@ Streetcar and MAX stops together can total at most 8. Values are saved in `sdkco
 | `main/trimet/trimet_client.{c,h}` | HTTPS fetch + polling task; `trimet_client_get()` returns the last good snapshot and status |
 | `main/trimet/trimet_format.{c,h}` | Display logic: sign → badge/destination, line colors, arrival selection, ETA text (host-testable) |
 | `main/trimet/trimet_view.{c,h}` | LVGL arrivals screen (the start screen) |
-| `main/trimet/trimet_settings.{c,h}` | Settings screen (opened from the cog); Wi-Fi entry opens the template's Wi-Fi screen |
+| `main/trimet/trimet_settings.{c,h}` | Settings screen (opened from the cog): Wi-Fi (opens the template's Wi-Fi screen) and Night Dimming |
+| `main/trimet/trimet_dimmer.{c,h}` | Night dimming: checks local time every 15 s and sets the backlight; settings saved in NVS |
 | `main/model`, `main/view`, `main/ui` | From the Seeed template (Wi-Fi, time, display, demo UI) |
 | `test/host/` | Host unit tests for the parser, run against a captured live response |
 
@@ -132,6 +134,7 @@ Stops are shown 2 per page, with up to 3 arrivals per stop in the next 60 min. A
 
 - **Touch:** tap anywhere inside the center region (100 px border on all sides) to go to the next page. The 15 s timer restarts on each tap. The 100 px border is reserved for other touch targets.
 - **Settings:** the cog in the bottom-right corner opens Settings. The Wi-Fi entry shows the current network and opens the template's Wi-Fi setup screen; its back button returns to Settings.
+- **Night dimming:** the backlight dims to 10% between two times, by default 10:00 PM to 6:00 AM. Settings → Night dimming has an on/off switch and start/end times in 15-minute steps. Changes apply immediately and are saved in NVS, so they survive reboots and reflashing. Dimming waits until the clock has synced.
 - **ETA colors:** white = live estimate, gray = scheduled only, amber = delayed, red = canceled.
 - **Countdowns:** computed from TriMet's server time plus the time elapsed since the fetch, so they don't depend on the device clock.
 - **Footer:** shows how long ago data was fetched. It turns amber when the data is stale (more than 2 missed polls).
@@ -169,6 +172,8 @@ Board config lives in `sdkconfig.defaults` (`CONFIG_LCD_BOARD_SENSECAP_INDICATOR
 - Added the missing `#include "esp_timer.h"` in `main/model/indicator_time.c` and `indicator_btn.c`, which are required on IDF 5.1.7
 - Added `ui_set_screen_last()` to `main/ui/ui.c`, so the Wi-Fi screen's back button can return to our screens
 - `main.c` loads the arrivals screen at startup instead of the template's time screen
+- `indicator_time.c`: `__time_zone_set()` uses `CONFIG_TRIMET_TZ` when set. The template's IP lookup sets a fixed UTC offset that doesn't follow DST, and it geolocates this device to Seattle.
+- `sdkconfig.defaults`: `CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y` puts TLS buffers in PSRAM. Internal RAM is shared with LVGL and ran out during concurrent HTTPS requests.
 
 ## Project status
 

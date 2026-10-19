@@ -85,3 +85,7 @@ CONFIG_LV_FONT_MONTSERRAT_42=y
 CONFIG_LV_FONT_MONTSERRAT_44=y
 CONFIG_LV_FONT_MONTSERRAT_46=y
 CONFIG_LV_FONT_MONTSERRAT_48=y
+
+# TLS buffers in PSRAM: internal RAM is shared with LVGL objects and ran out
+# during concurrent HTTPS requests (mbedtls_ssl_setup -0x7F00).
+CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y

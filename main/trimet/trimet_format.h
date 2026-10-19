@@ -6,6 +6,7 @@
 #ifndef TRIMET_FORMAT_H
 #define TRIMET_FORMAT_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -55,6 +56,16 @@ void trimet_format_eta(const trimet_arrival_t *a, int64_t now_ms, char *buf, siz
  * already says MAX). "Stop 12345" if the stop is not in the response.
  * The built-in LVGL fonts are ASCII only, so keep output ASCII. */
 void trimet_format_stop_name(const trimet_arrivals_t *all, uint32_t loc_id, char *buf, size_t len);
+
+/*
+ * True if now_min (minutes since local midnight) is in [start_min, end_min).
+ * The window may wrap past midnight (e.g. 22:00-06:00). start == end is an
+ * empty window.
+ */
+bool trimet_time_in_window(int now_min, int start_min, int end_min);
+
+/* Minutes since midnight -> "10:00 PM". */
+void trimet_format_time_of_day(int minutes, char *buf, size_t len);
 
 #ifdef __cplusplus
 }

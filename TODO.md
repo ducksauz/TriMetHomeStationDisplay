@@ -19,7 +19,7 @@
 
 ## 2. Connectivity
 - [ ] Wi-Fi station connect, with retry/backoff and a status indicator on screen
-- [ ] SNTP time sync with the `America/Los_Angeles` timezone (`PST8PDT,M3.2.0,M11.1.0`)
+- [x] SNTP time sync (template) with a fixed `PST8PDT,M3.2.0,M11.1.0` time zone (`CONFIG_TRIMET_TZ`)
 - [x] HTTPS client using `esp_http_client` and `esp_crt_bundle`
 
 ## 3. TriMet API client
@@ -41,13 +41,15 @@
 - [x] Verify layout on device (normal layout)
 - [x] Add Old Town/Chinatown (Red, Blue) as a second MAX page (stop lists split 2 per page)
 - [x] Verify settings screen and Wi-Fi round trip on device
-- [ ] Verify the second MAX page on device
+- [x] Verify the second MAX page on device
 - [x] Settings cog (bottom-right) with a Wi-Fi entry
 - [x] Gate fetches on having an IP address (`IP_EVENT_STA_GOT_IP`), so the first fetch no longer fails with a DNS error
 - [x] Make LVGL updates thread-safe: the UI pulls snapshots from an LVGL timer, so the data task never touches LVGL
 
 ## 5. Polish
-- [ ] Dim or blank the backlight overnight, or when no service is running
+- [x] Night dimming (default 10 PM - 6 AM, 10%), configurable under Settings → Night dimming
+- [ ] Verify Night Dimming settings screen on device
+- [ ] Optional: tap to temporarily brighten while dimmed
 - [ ] Touch to switch stops or directions (optional)
 - [ ] Wi-Fi provisioning without reflashing (SoftAP or BLE) (optional)
 - [ ] Watchdog and recovery; OTA updates (optional)

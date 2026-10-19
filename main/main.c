@@ -1,6 +1,11 @@
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "sdkconfig.h"
 #include "bsp_board.h"
 #include "lv_port.h"
 #include "esp_event.h"
@@ -9,6 +14,7 @@
 #include "indicator_model.h"
 #include "indicator_view.h"
 #include "trimet_client.h"
+#include "trimet_dimmer.h"
 #include "trimet_view.h"
 //#include "indicator_controller.h"
 
@@ -34,6 +40,11 @@ esp_event_loop_handle_t view_event_handle;
 void app_main(void)
 {
     ESP_LOGI("", SENSECAP, VERSION, __DATE__, __TIME__);
+
+    if (strlen(CONFIG_TRIMET_TZ) > 0) {
+        setenv("TZ", CONFIG_TRIMET_TZ, 1);
+        tzset();
+    }
 
     ESP_ERROR_CHECK(bsp_board_init());
     lv_port_init();
@@ -61,6 +72,7 @@ void app_main(void)
     if (trimet_client_start() != ESP_OK) {
         ESP_LOGE(TAG, "TriMet client not started; run 'idf.py menuconfig' > TriMet Station Display");
     }
+    trimet_dimmer_init();
 
     indicator_controller_init();
 

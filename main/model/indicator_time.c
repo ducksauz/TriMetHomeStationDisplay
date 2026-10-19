@@ -1,4 +1,6 @@
 #include "indicator_time.h"
+#include "sdkconfig.h"
+#include <string.h>
 #include "esp_sntp.h"
 #include "esp_timer.h"
 #include "freertos/semphr.h"
@@ -82,6 +84,13 @@ static void __time_sync_stop(void)
 
 static void __time_zone_set(struct view_data_time_cfg *p_cfg)
 {
+    /* TriMet display: a fixed time zone with DST rules wins over the
+     * template's IP-based lookup (a fixed UTC offset). */
+    if (strlen(CONFIG_TRIMET_TZ) > 0) {
+        setenv("TZ", CONFIG_TRIMET_TZ, 1);
+        tzset();
+        return;
+    }
     if ( !p_cfg->auto_update_zone) {
         
         int8_t zone = p_cfg->zone;
