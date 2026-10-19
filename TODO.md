@@ -18,7 +18,8 @@
 - [x] Set your `appID` in `idf.py menuconfig`
 
 ## 2. Connectivity
-- [ ] Wi-Fi station connect, with retry/backoff and a status indicator on screen
+- [x] Wi-Fi station connect with retry (template)
+- [ ] Optional: Wi-Fi status indicator on the arrivals screen
 - [x] SNTP time sync (template) with a fixed `PST8PDT,M3.2.0,M11.1.0` time zone (`CONFIG_TRIMET_TZ`)
 - [x] HTTPS client using `esp_http_client` and `esp_crt_bundle`
 
@@ -50,10 +51,11 @@
 - [x] Night dimming (default 10 PM - 6 AM, 10%), configurable under Settings → Night dimming
 - [x] Verify Night Dimming settings screen on device
 - [ ] Optional: tap to temporarily brighten while dimmed
-- [ ] Touch to switch stops or directions (optional)
-- [ ] Wi-Fi provisioning without reflashing (SoftAP or BLE) (optional)
+- [x] Touch to switch pages (center tap)
+- [x] Wi-Fi setup without reflashing (template touchscreen screen, via Settings)
 - [ ] Watchdog and recovery; OTA updates (optional)
 - [ ] Optional: show service alerts/detours via the TriMet Alerts API
 
 ## 6. Docs
-- [ ] Complete the README with real build/flash steps and screenshots
+- [x] Complete the README with real build/flash steps
+- [ ] Add photos/screenshots to the README
