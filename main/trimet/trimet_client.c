@@ -116,8 +116,9 @@ static trimet_state_t fetch_once(trimet_arrivals_t *out, int *http_status, char 
     err[0] = '\0';
 
     /* Never log this URL: it contains the appID. */
-    snprintf(url, sizeof(url), TRIMET_URL_BASE "?locIDs=%s&appID=%s&minutes=%d",
-             CONFIG_TRIMET_STOP_IDS, CONFIG_TRIMET_APP_ID, TRIMET_LOOKAHEAD_MIN);
+    snprintf(url, sizeof(url), TRIMET_URL_BASE "?locIDs=%s,%s&appID=%s&minutes=%d",
+             CONFIG_TRIMET_STREETCAR_STOP_IDS, CONFIG_TRIMET_MAX_STOP_IDS,
+             CONFIG_TRIMET_APP_ID, TRIMET_LOOKAHEAD_MIN);
 
     esp_http_client_config_t cfg = {
         .url = url,
@@ -278,7 +279,8 @@ esp_err_t trimet_client_start(void)
     if (xTaskCreate(poll_task, "trimet", TASK_STACK, NULL, TASK_PRIO, &s_task) != pdPASS) {
         return ESP_ERR_NO_MEM;
     }
-    ESP_LOGI(TAG, "started: stops %s, every %d s", CONFIG_TRIMET_STOP_IDS, CONFIG_TRIMET_POLL_INTERVAL_SEC);
+    ESP_LOGI(TAG, "started: streetcar stops %s, MAX stops %s, every %d s",
+             CONFIG_TRIMET_STREETCAR_STOP_IDS, CONFIG_TRIMET_MAX_STOP_IDS, CONFIG_TRIMET_POLL_INTERVAL_SEC);
     return ESP_OK;
 }
 

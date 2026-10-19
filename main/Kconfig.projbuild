@@ -8,16 +8,24 @@ menu "TriMet Station Display"
             This is a secret: it is stored in sdkconfig, which is git-ignored.
             Do not put it in sdkconfig.defaults.
 
-    config TRIMET_STOP_IDS
-        string "Stop IDs (comma-separated)"
-        default "10772,10754,7601,7763"
+    config TRIMET_STREETCAR_STOP_IDS
+        string "Streetcar page stop IDs (comma-separated, max 2)"
+        default "10772,10754"
         help
-            Comma-separated TriMet stop IDs, passed as the Arrivals V2 locIDs
-            parameter. Defaults:
-              10772  NW 10th & Glisan (Streetcar, northbound)
-              10754  NW 11th & Glisan (Streetcar, southbound)
-              7601   Union Station/NW 5th & Glisan MAX (southbound)
-              7763   Union Station/NW 6th & Hoyt MAX (northbound)
+            Stops shown on the Streetcar page. Only streetcar arrivals are shown.
+            Defaults:
+              10772  NW 10th & Glisan (northbound)
+              10754  NW 11th & Glisan (southbound)
+
+    config TRIMET_MAX_STOP_IDS
+        string "MAX page stop IDs (comma-separated, max 2)"
+        default "7601,7763"
+        help
+            Stops shown on the MAX page. Only light rail arrivals are shown,
+            so the 291/293 shuttle buses at these stops are hidden.
+            Defaults:
+              7601  Union Station/NW 5th & Glisan MAX (southbound)
+              7763  Union Station/NW 6th & Hoyt MAX (northbound)
 
     config TRIMET_POLL_INTERVAL_SEC
         int "Arrivals poll interval (seconds)"
@@ -25,5 +33,14 @@ menu "TriMet Station Display"
         default 30
         help
             How often to request arrivals from TriMet.
+
+    config TRIMET_PAGE_ROTATE_SEC
+        int "Page rotation interval (seconds)"
+        range 5 120
+        default 15
+        help
+            How long each page (Streetcar, MAX) is shown before switching.
+            Tapping the middle of the screen also switches pages and restarts
+            this timer.
 
 endmenu

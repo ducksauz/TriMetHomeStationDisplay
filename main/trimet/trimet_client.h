@@ -1,7 +1,7 @@
 /*
- * TriMet Arrivals V2 client: fetches arrivals for CONFIG_TRIMET_STOP_IDS every
- * CONFIG_TRIMET_POLL_INTERVAL_SEC while the network is up, and keeps the last
- * good result.
+ * TriMet Arrivals V2 client: fetches arrivals for the configured streetcar and
+ * MAX stops every CONFIG_TRIMET_POLL_INTERVAL_SEC while the network is up, and
+ * keeps the last good result.
  */
 #ifndef TRIMET_CLIENT_H
 #define TRIMET_CLIENT_H

@@ -31,11 +31,19 @@ typedef enum {
     TRIMET_STATUS_CANCELED,
 } trimet_status_t;
 
+typedef enum {
+    TRIMET_MODE_OTHER = 0,
+    TRIMET_MODE_BUS,
+    TRIMET_MODE_LIGHT_RAIL,    /* MAX */
+    TRIMET_MODE_STREETCAR,
+} trimet_mode_t;
+
 typedef struct {
     uint32_t        loc_id;
     uint16_t        route;
     uint8_t         dir;
     bool            streetcar;
+    trimet_mode_t   mode;          /* from routeSubType */
     trimet_status_t status;
     int64_t         time_ms;       /* best arrival time: estimated if present, else scheduled (epoch ms) */
     int64_t         scheduled_ms;  /* epoch ms */

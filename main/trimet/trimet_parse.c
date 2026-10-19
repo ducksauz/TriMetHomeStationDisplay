@@ -72,6 +72,22 @@ static trimet_status_t parse_status(const char *s)
     return TRIMET_STATUS_UNKNOWN;
 }
 
+static trimet_mode_t parse_mode(const char *s, bool streetcar)
+{
+    if (s) {
+        if (strcmp(s, "Streetcar") == 0) {
+            return TRIMET_MODE_STREETCAR;
+        }
+        if (strcmp(s, "Light Rail") == 0) {
+            return TRIMET_MODE_LIGHT_RAIL;
+        }
+        if (strcmp(s, "Bus") == 0) {
+            return TRIMET_MODE_BUS;
+        }
+    }
+    return streetcar ? TRIMET_MODE_STREETCAR : TRIMET_MODE_OTHER;
+}
+
 static uint32_t parse_color(const char *s)
 {
     char *end = NULL;
@@ -94,6 +110,7 @@ static void parse_arrival(const cJSON *a, trimet_arrival_t *out)
     out->route        = (uint16_t)get_i64(a, "route", 0);
     out->dir          = (uint8_t)get_i64(a, "dir", 0);
     out->streetcar    = get_bool(a, "streetCar");
+    out->mode         = parse_mode(get_str(a, "routeSubType"), out->streetcar);
     out->status       = parse_status(get_str(a, "status"));
     out->scheduled_ms = get_i64(a, "scheduled", 0);
     /* "estimated" is absent for schedule-only arrivals. */

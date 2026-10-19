@@ -9,7 +9,8 @@ SAN    := -fsanitize=address,undefined
 CFLAGS += -std=gnu17 -g $(SAN) -I$(SRC_DIR) -I$(CJSON_DIR)
 STRICT := -Wall -Wextra -Werror
 
-BIN := build/test_trimet_parse
+BIN := build/test_trimet
+SRCS := $(SRC_DIR)/trimet_parse.c $(SRC_DIR)/trimet_format.c
 
 .PHONY: test clean
 test: $(BIN)
@@ -20,8 +21,8 @@ build/cJSON.o: $(CJSON_DIR)/cJSON.c
 	@mkdir -p build
 	$(CC) $(CFLAGS) -w -c -o $@ $<
 
-$(BIN): test_trimet_parse.c $(SRC_DIR)/trimet_parse.c $(SRC_DIR)/trimet_parse.h build/cJSON.o
-	$(CC) $(CFLAGS) $(STRICT) -o $@ test_trimet_parse.c $(SRC_DIR)/trimet_parse.c build/cJSON.o -lm
+$(BIN): test_trimet.c $(SRCS) $(wildcard $(SRC_DIR)/*.h) build/cJSON.o
+	$(CC) $(CFLAGS) $(STRICT) -o $@ test_trimet.c $(SRCS) build/cJSON.o -lm
 
 clean:
 	rm -rf build

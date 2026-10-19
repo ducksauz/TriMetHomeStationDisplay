@@ -83,7 +83,9 @@ GET https://developer.trimet.org/ws/v2/arrivals?locIDs=<id1,id2,...>&appID=<APP_
 | Option | Default | Notes |
 |--------|---------|-------|
 | `CONFIG_TRIMET_APP_ID` | *(empty)* | Your TriMet appID. **Secret.** |
-| `CONFIG_TRIMET_STOP_IDS` | `10772,10754,7601,7763` | Sent as `locIDs` |
+| `CONFIG_TRIMET_STREETCAR_STOP_IDS` | `10772,10754` | Streetcar page (max 2 stops; streetcar arrivals only) |
+| `CONFIG_TRIMET_MAX_STOP_IDS` | `7601,7763` | MAX page (max 2 stops; light rail only, so shuttle buses are hidden) |
+| `CONFIG_TRIMET_PAGE_ROTATE_SEC` | `15` | Time each page is shown, 5–120 s |
 | `CONFIG_TRIMET_POLL_INTERVAL_SEC` | `30` | 15–300 s |
 
 Values are saved in `sdkconfig`, which is git-ignored. Never put the appID in `sdkconfig.defaults`, because that file is committed. At boot the firmware logs whether the appID is set, without printing the appID itself.
@@ -94,6 +96,8 @@ Values are saved in `sdkconfig`, which is git-ignored. Never put the appID in `s
 |------|---------|
 | `main/trimet/trimet_parse.{c,h}` | Arrivals V2 JSON → `trimet_arrivals_t` (pure C + cJSON, host-testable) |
 | `main/trimet/trimet_client.{c,h}` | HTTPS fetch + polling task; `trimet_client_get()` returns the last good snapshot and status |
+| `main/trimet/trimet_format.{c,h}` | Display logic: sign → badge/destination, line colors, arrival selection, ETA text (host-testable) |
+| `main/trimet/trimet_view.{c,h}` | LVGL arrivals screen (the start screen) |
 | `main/model`, `main/view`, `main/ui` | From the Seeed template (Wi-Fi, time, display, demo UI) |
 | `test/host/` | Host unit tests for the parser, run against a captured live response |
 
@@ -103,10 +107,30 @@ Values are saved in `sdkconfig`, which is git-ignored. Never put the appID in `s
 - The `route` number doesn't always match the sign. Interlined MAX trips can show route 190 with an Orange Line sign, so the UI should label arrivals by their sign text.
 - A bad appID returns **HTTP 403** in plain text. An unknown stop returns HTTP 200 with `resultSet.error.content`.
 
+## Screen
+
+There are two pages, **Streetcar** and **MAX**. They alternate every 15 s. Each page shows its stops, with up to 3 arrivals per stop within the next 90 min:
+
+```
+ Streetcar                          9:41 PM
+ NW 10th & Glisan                Northbound
+ [ NS ]  NW 23rd Ave                  5 min
+ [ A  ]  Lloyd via Pearl             12 min
+ NW 11th & Glisan                Southbound
+ [ NS ]  South Waterfront             4 min
+ [ B  ]  Lloyd via OMSI                 Due
+ Updated 8s ago          o O       Gray = scheduled
+```
+
+- **Touch:** tap anywhere inside the center region (100 px border on all sides) to switch pages. The 15 s timer restarts on each tap. The 100 px border is reserved for other touch targets.
+- **ETA colors:** white = live estimate, gray = scheduled only, amber = delayed, red = canceled.
+- **Countdowns:** computed from TriMet's server time plus the time elapsed since the fetch, so they don't depend on the device clock.
+- **Footer:** shows how long ago data was fetched. It turns amber when the data is stale (more than 2 missed polls).
+
 ## Tests
 
 ```sh
-make -C test/host      # parser tests, built with ASan/UBSan; needs ESP-IDF's cJSON at $IDF_PATH
+make -C test/host      # parser + display-logic tests, built with ASan/UBSan; needs ESP-IDF's cJSON at $IDF_PATH
 ```
 
 ## Build & flash
@@ -137,4 +161,4 @@ Board config lives in `sdkconfig.defaults` (`CONFIG_LCD_BOARD_SENSECAP_INDICATOR
 
 ## Project status
 
-The TriMet client is running on the device and logs live arrivals. The screen still shows the template's demo UI. See [TODO.md](TODO.md).
+The arrivals screen (Streetcar and MAX pages) runs on the device. See [TODO.md](TODO.md).

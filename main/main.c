@@ -9,6 +9,7 @@
 #include "indicator_model.h"
 #include "indicator_view.h"
 #include "trimet_client.h"
+#include "trimet_view.h"
 //#include "indicator_controller.h"
 
 static const char *TAG = "app_main";
@@ -51,6 +52,7 @@ void app_main(void)
 
     lv_port_sem_take();
     indicator_view_init();
+    trimet_view_init();     /* replaces the template's time screen as the start screen */
     lv_port_sem_give();
 
     /* Before the model so it sees the first Wi-Fi status event. */
