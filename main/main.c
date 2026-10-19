@@ -1,8 +1,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
-#include "sdkconfig.h"
-#include <string.h>
 #include "bsp_board.h"
 #include "lv_port.h"
 #include "esp_event.h"
@@ -10,6 +8,7 @@
 
 #include "indicator_model.h"
 #include "indicator_view.h"
+#include "trimet_client.h"
 //#include "indicator_controller.h"
 
 static const char *TAG = "app_main";
@@ -35,13 +34,6 @@ void app_main(void)
 {
     ESP_LOGI("", SENSECAP, VERSION, __DATE__, __TIME__);
 
-    if (strlen(CONFIG_TRIMET_APP_ID) == 0) {
-        ESP_LOGW(TAG, "TriMet appID not set; run 'idf.py menuconfig' > TriMet Station Display");
-    }
-    ESP_LOGI(TAG, "TriMet appID: %s, stops: %s, poll: %ds",
-             strlen(CONFIG_TRIMET_APP_ID) ? "set" : "MISSING",
-             CONFIG_TRIMET_STOP_IDS, CONFIG_TRIMET_POLL_INTERVAL_SEC);
-
     ESP_ERROR_CHECK(bsp_board_init());
     lv_port_init();
 
@@ -60,6 +52,11 @@ void app_main(void)
     lv_port_sem_take();
     indicator_view_init();
     lv_port_sem_give();
+
+    /* Before the model so it sees the first Wi-Fi status event. */
+    if (trimet_client_start() != ESP_OK) {
+        ESP_LOGE(TAG, "TriMet client not started; run 'idf.py menuconfig' > TriMet Station Display");
+    }
 
     indicator_model_init();
     indicator_controller_init();

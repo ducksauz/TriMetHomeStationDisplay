@@ -15,21 +15,22 @@
 - [x] Confirm the display works with the template's LVGL demo
 - [x] Confirm touch works
 - [x] Add a Kconfig menu for `appID`, stop IDs and poll interval (Wi-Fi uses the template's touchscreen setup screen)
-- [ ] Set your `appID` in `idf.py menuconfig`
+- [x] Set your `appID` in `idf.py menuconfig`
 
 ## 2. Connectivity
 - [ ] Wi-Fi station connect, with retry/backoff and a status indicator on screen
 - [ ] SNTP time sync with the `America/Los_Angeles` timezone (`PST8PDT,M3.2.0,M11.1.0`)
-- [ ] HTTPS client using `esp_http_client` and `esp_crt_bundle`
+- [x] HTTPS client using `esp_http_client` and `esp_crt_bundle`
 
 ## 3. TriMet API client
-- [ ] Build the Arrivals V2 request (`locIDs`, `appID`, `minutes`, `arrivals`)
-- [ ] Parse the JSON with cJSON. Handle large responses: stream into PSRAM, never into a fixed small buffer.
-- [ ] Map the response into a compact struct: stop, route, sign, `estimated`/`scheduled`, status, color
-- [ ] Filter to streetcar and MAX routes and the chosen stops/directions
-- [ ] Confirm the `locid` field on arrivals against a live response
-- [ ] Handle errors (HTTP errors, malformed JSON, the `resultSet.error` field) and keep the last good data
-- [ ] Polling task, every 30–60 s, decoupled from the UI
+- [x] Build the Arrivals V2 request (`locIDs`, `appID`, `minutes=60`)
+- [x] Parse the JSON with cJSON, reading the response into a growable PSRAM buffer (64 KB cap)
+- [x] Map the response into a compact struct: stop, route, sign, `estimated`/`scheduled`, status, color
+- [ ] Filter which arrivals to show (e.g. drop 291/293 shuttles, cap far-future scheduled trips); this belongs in the UI layer
+- [x] Confirm the `locid` field on arrivals against a live response
+- [x] Handle errors (HTTP 403, malformed JSON, `resultSet.error`) and keep the last good data; back off 5 s doubling up to the poll interval
+- [x] Polling task, decoupled from the UI (`trimet_client_get()` returns a snapshot)
+- [x] Host unit tests for the parser (`make -C test/host`)
 
 ## 4. UI (LVGL, 480×480)
 - [ ] Mock up the layout: header (stop name and clock), arrival rows (route badge, destination, "X min")

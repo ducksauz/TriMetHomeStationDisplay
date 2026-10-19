@@ -88,6 +88,27 @@ GET https://developer.trimet.org/ws/v2/arrivals?locIDs=<id1,id2,...>&appID=<APP_
 
 Values are saved in `sdkconfig`, which is git-ignored. Never put the appID in `sdkconfig.defaults`, because that file is committed. At boot the firmware logs whether the appID is set, without printing the appID itself.
 
+## Code layout
+
+| Path | Purpose |
+|------|---------|
+| `main/trimet/trimet_parse.{c,h}` | Arrivals V2 JSON → `trimet_arrivals_t` (pure C + cJSON, host-testable) |
+| `main/trimet/trimet_client.{c,h}` | HTTPS fetch + polling task; `trimet_client_get()` returns the last good snapshot and status |
+| `main/model`, `main/view`, `main/ui` | From the Seeed template (Wi-Fi, time, display, demo UI) |
+| `test/host/` | Host unit tests for the parser, run against a captured live response |
+
+**Notes on the live API data:**
+- `estimated` is missing for schedule-only arrivals. The parser falls back to `scheduled`.
+- Signs contain double spaces (`"MAX  Yellow Line"`). The parser collapses them.
+- The `route` number doesn't always match the sign. Interlined MAX trips can show route 190 with an Orange Line sign, so the UI should label arrivals by their sign text.
+- A bad appID returns **HTTP 403** in plain text. An unknown stop returns HTTP 200 with `resultSet.error.content`.
+
+## Tests
+
+```sh
+make -C test/host      # parser tests, built with ASan/UBSan; needs ESP-IDF's cJSON at $IDF_PATH
+```
+
 ## Build & flash
 
 Requires **ESP-IDF v5.1.7**, installed at `~/esp/esp-idf`:
@@ -116,4 +137,4 @@ Board config lives in `sdkconfig.defaults` (`CONFIG_LCD_BOARD_SENSECAP_INDICATOR
 
 ## Project status
 
-The template is imported, builds on ESP-IDF v5.1.7, and runs on the D1S. The demo UI displays correctly. See [TODO.md](TODO.md).
+The TriMet client is running on the device and logs live arrivals. The screen still shows the template's demo UI. See [TODO.md](TODO.md).
