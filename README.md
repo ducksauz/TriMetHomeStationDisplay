@@ -14,7 +14,7 @@ A small always-on display that shows live arrival times for the Portland Streetc
 ## Software stack
 
 - **Framework:** [ESP-IDF](https://docs.espressif.com/projects/esp-idf/)
-- **Graphics:** [LVGL](https://docs.lvgl.io/master/intro/index.html)
+- **Graphics:** [LVGL 8.3](https://docs.lvgl.io/8.3/) (bundled in `components/lvgl`; pinned to v8.3, do not use the v9 docs/APIs)
 - **Starting point:** [Seeed-Solution/indicator-esp-idf-template](https://github.com/Seeed-Solution/indicator-esp-idf-template)
 - **Data source:** [TriMet Web Services](https://developer.trimet.org/ws_docs/), mainly [Arrivals V2](https://developer.trimet.org/ws_docs/arrivals2_ws.shtml)
 
@@ -80,15 +80,30 @@ Wi-Fi credentials, the TriMet `appID` and the stop IDs will live in a local, git
 
 ## Build & flash
 
-Exact steps will be filled in once the template is imported. The expected flow:
+Requires **ESP-IDF v5.1.7**, installed at `~/esp/esp-idf`:
 
 ```sh
-. $IDF_PATH/export.sh
-idf.py set-target esp32s3
-idf.py menuconfig        # Wi-Fi, appID, stop IDs
-idf.py build flash monitor
+mkdir -p ~/esp && cd ~/esp
+git clone -b v5.1.7 --recursive https://github.com/espressif/esp-idf.git
+cd esp-idf && ./install.sh esp32s3
 ```
+
+Build:
+
+```sh
+. ~/esp/esp-idf/export.sh
+idf.py set-target esp32s3     # first time only
+idf.py build
+idf.py -p /dev/cu.usbserial-XXXX flash monitor
+```
+
+Board config lives in `sdkconfig.defaults` (`CONFIG_LCD_BOARD_SENSECAP_INDICATOR_D1=y` for the D1/D1S). If you change `sdkconfig.defaults`, delete `sdkconfig` so it gets regenerated.
+
+### Changes from the upstream template
+- Board set to D1/D1S (upstream defaults to D1L/LoRa)
+- Project renamed to `trimet_station_display`
+- Added the missing `#include "esp_timer.h"` in `main/model/indicator_time.c` and `indicator_btn.c`, which are required on IDF 5.1.7
 
 ## Project status
 
-Planning. See [TODO.md](TODO.md).
+The template is imported and builds on ESP-IDF v5.1.7. It hasn't been flashed to hardware yet. See [TODO.md](TODO.md).

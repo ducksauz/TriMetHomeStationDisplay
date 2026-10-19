@@ -1,7 +1,6 @@
 # ESP-IDF build output
 build/
 managed_components/
-dependencies.lock
 sdkconfig
 sdkconfig.old
 
@@ -16,3 +15,8 @@ sdkconfig.secrets
 .idea/
 .DS_Store
 *.swp
+
+# Template extras
+bin/
+*.o
+*.pyc

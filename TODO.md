@@ -6,11 +6,12 @@
 - [x] Pick stops and look up their stop IDs: 10772, 10754 (streetcar); 7601, 7763 (MAX)
 - [ ] Decide whether the MAX disruption shuttles (291/293) should be shown or filtered out
 - [ ] Decide on the screen layout: number of stops and rows, and what to show for each arrival
-- [ ] Decide on the ESP-IDF and LVGL versions (follow the template unless there's a reason not to)
+- [x] Decide on the ESP-IDF and LVGL versions: ESP-IDF v5.1.7, LVGL 8.3.1 (bundled with template)
 
 ## 1. Project setup
 - [x] `git init`, add `.gitignore` (build/, sdkconfig, secrets)
-- [ ] Import the template and confirm it builds and flashes to the D1S unchanged
+- [x] Import the template and confirm it builds
+- [ ] Flash to the D1S and confirm it boots (check the screen setting GX vs DX if the display looks wrong)
 - [ ] Confirm the display and touch work with the template's LVGL demo
 - [ ] Add a Kconfig menu (or `secrets.h`) for Wi-Fi SSID/password, `appID` and stop IDs
 
