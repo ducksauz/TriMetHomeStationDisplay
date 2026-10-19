@@ -48,7 +48,7 @@
 
 ## 5. Polish
 - [x] Night dimming (default 10 PM - 6 AM, 10%), configurable under Settings → Night dimming
-- [ ] Verify Night Dimming settings screen on device
+- [x] Verify Night Dimming settings screen on device
 - [ ] Optional: tap to temporarily brighten while dimmed
 - [ ] Touch to switch stops or directions (optional)
 - [ ] Wi-Fi provisioning without reflashing (SoftAP or BLE) (optional)
