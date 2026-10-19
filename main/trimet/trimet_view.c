@@ -22,8 +22,9 @@
 #define SECTION_Y0      70
 #define BODY_BOTTOM     442    /* sections must end above the footer */
 
-#define STOPS_PER_PAGE  4
-#define MAX_ROWS        3      /* rows per stop in the roomiest layout */
+#define STOPS_PER_PAGE  2      /* longer stop lists continue on another page */
+#define MAX_PAGES       6
+#define MAX_ROWS        3      /* arrivals per stop */
 #define MAX_MINUTES     60     /* hide arrivals further out than this */
 #define REFRESH_MS      1000
 
@@ -40,8 +41,7 @@
 
 static const char *TAG = "trimet-view";
 
-/* Section geometry and fonts. Pages with 1-2 stops use the normal layout,
- * 3-4 stops the compact one. */
+/* Section geometry and fonts. */
 typedef struct {
     int               rows;        /* arrivals per stop */
     int               hdr_h;       /* stop name row */
@@ -53,20 +53,12 @@ typedef struct {
     const lv_font_t  *name_font, *dir_font, *badge_font, *dest_font, *eta_font, *empty_font;
 } layout_t;
 
-static const layout_t LAYOUT_NORMAL = {
-    .rows = 3, .hdr_h = 32, .row_h = 50, .gap = 6,
+static const layout_t LAYOUT = {
+    .rows = MAX_ROWS, .hdr_h = 32, .row_h = 50, .gap = 6,
     .badge_w = 92, .badge_h = 38, .eta_w = 112, .empty_y = 14,
     .name_font = &lv_font_montserrat_20, .dir_font = &lv_font_montserrat_16,
     .badge_font = &lv_font_montserrat_20, .dest_font = &lv_font_montserrat_22,
     .eta_font = &lv_font_montserrat_28, .empty_font = &lv_font_montserrat_18,
-};
-
-static const layout_t LAYOUT_COMPACT = {
-    .rows = 2, .hdr_h = 24, .row_h = 33, .gap = 3,
-    .badge_w = 84, .badge_h = 28, .eta_w = 96, .empty_y = 6,
-    .name_font = &lv_font_montserrat_16, .dir_font = &lv_font_montserrat_14,
-    .badge_font = &lv_font_montserrat_16, .dest_font = &lv_font_montserrat_18,
-    .eta_font = &lv_font_montserrat_22, .empty_font = &lv_font_montserrat_16,
 };
 
 typedef struct {
@@ -90,19 +82,19 @@ typedef struct {
     trimet_mode_t   mode;
     uint32_t        stops[STOPS_PER_PAGE];
     int             stop_count;
-    const layout_t *layout;
     lv_obj_t       *cont;
     section_t       sections[STOPS_PER_PAGE];
 } page_t;
 
-static page_t     s_pages[2];
+static page_t     s_pages[MAX_PAGES];
+static int        s_page_count;
 static int        s_page;
 static lv_obj_t  *s_scr;
 static lv_obj_t  *s_title;
 static lv_obj_t  *s_clock;
 static lv_obj_t  *s_status;
 static lv_obj_t  *s_legend;
-static lv_obj_t  *s_dots[2];
+static lv_obj_t  *s_dots[MAX_PAGES];
 static lv_timer_t *s_rotate_timer;
 static trimet_arrivals_t *s_data;   /* PSRAM copy of the client's snapshot */
 
@@ -194,7 +186,7 @@ static void render_section(const page_t *page, section_t *sec, uint32_t loc_id,
                            bool have_data, int64_t now_ms, bool *any_scheduled)
 {
     const trimet_arrival_t *sel[MAX_ROWS];
-    const int rows = page->layout->rows;
+    const int rows = LAYOUT.rows;
     const trimet_location_t *loc = NULL;
     char name[TRIMET_DESC_LEN];
     int n = 0;
@@ -285,11 +277,9 @@ static void render(void)
     }
 
     set_text(s_title, page->title);
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < s_page_count; i++) {
         set_bg_color(s_dots[i], i == s_page ? COLOR_TEXT : COLOR_DOT_OFF);
-        if (s_pages[i].cont) {
-            set_hidden(s_pages[i].cont, i != s_page);
-        }
+        set_hidden(s_pages[i].cont, i != s_page);
     }
     for (int i = 0; i < page->stop_count; i++) {
         render_section(page, &page->sections[i], page->stops[i], have_data, now_ms, &any_scheduled);
@@ -305,10 +295,9 @@ static void show_page(int page)
     render();
 }
 
-static int other_page(void)
+static int next_page(void)
 {
-    int next = 1 - s_page;
-    return s_pages[next].stop_count > 0 ? next : s_page;
+    return s_page_count > 0 ? (s_page + 1) % s_page_count : 0;
 }
 
 /* ---- events and timers (run in the LVGL task, lock held) ---- */
@@ -323,7 +312,7 @@ static void refresh_timer_cb(lv_timer_t *t)
 static void rotate_timer_cb(lv_timer_t *t)
 {
     if (lv_scr_act() == s_scr) {
-        show_page(other_page());
+        show_page(next_page());
     }
 }
 
@@ -343,7 +332,7 @@ static void screen_event_cb(lv_event_t *e)
     lv_indev_get_point(indev, &p);
     if (p.x >= TRIMET_VIEW_TAP_BORDER && p.x < SCREEN_W - TRIMET_VIEW_TAP_BORDER &&
         p.y >= TRIMET_VIEW_TAP_BORDER && p.y < SCREEN_H - TRIMET_VIEW_TAP_BORDER) {
-        show_page(other_page());
+        show_page(next_page());
         lv_timer_reset(s_rotate_timer);   /* give the new page a full interval */
     }
 }
@@ -352,7 +341,7 @@ static void screen_event_cb(lv_event_t *e)
 
 static void build_section(page_t *page, section_t *sec, int index)
 {
-    const layout_t *L = page->layout;
+    const layout_t *L = &LAYOUT;
     const int sec_h = L->hdr_h + L->rows * L->row_h;
 
     sec->cont = plain_obj(page->cont);
@@ -403,7 +392,6 @@ static void build_section(page_t *page, section_t *sec, int index)
 
 static void build_page(page_t *page)
 {
-    page->layout = page->stop_count <= 2 ? &LAYOUT_NORMAL : &LAYOUT_COMPACT;
     page->cont = plain_obj(s_scr);
     lv_obj_set_pos(page->cont, 0, SECTION_Y0);
     lv_obj_set_size(page->cont, SCREEN_W, BODY_BOTTOM - SECTION_Y0);
@@ -413,17 +401,27 @@ static void build_page(page_t *page)
     }
 }
 
+/* Add pages for a stop list, STOPS_PER_PAGE stops each, all with the same title. */
+static void add_pages(const char *title, trimet_mode_t mode, const char *stop_ids)
+{
+    uint32_t ids[MAX_PAGES * STOPS_PER_PAGE];
+    int n = trimet_parse_id_list(stop_ids, ids, MAX_PAGES * STOPS_PER_PAGE);
+
+    for (int i = 0; i < n && s_page_count < MAX_PAGES; i += STOPS_PER_PAGE) {
+        page_t *page = &s_pages[s_page_count++];
+        page->title = title;
+        page->mode = mode;
+        for (int j = i; j < n && j < i + STOPS_PER_PAGE; j++) {
+            page->stops[page->stop_count++] = ids[j];
+        }
+    }
+}
+
 static void init_pages(void)
 {
-    s_pages[0].title = "Streetcar";
-    s_pages[0].mode = TRIMET_MODE_STREETCAR;
-    s_pages[0].stop_count = trimet_parse_id_list(CONFIG_TRIMET_STREETCAR_STOP_IDS, s_pages[0].stops, STOPS_PER_PAGE);
-
-    s_pages[1].title = "MAX";
-    s_pages[1].mode = TRIMET_MODE_LIGHT_RAIL;
-    s_pages[1].stop_count = trimet_parse_id_list(CONFIG_TRIMET_MAX_STOP_IDS, s_pages[1].stops, STOPS_PER_PAGE);
-
-    s_page = s_pages[0].stop_count > 0 ? 0 : 1;
+    add_pages("Streetcar", TRIMET_MODE_STREETCAR, CONFIG_TRIMET_STREETCAR_STOP_IDS);
+    add_pages("MAX", TRIMET_MODE_LIGHT_RAIL, CONFIG_TRIMET_MAX_STOP_IDS);
+    s_page = 0;
 }
 
 void trimet_view_init(void)
@@ -434,6 +432,10 @@ void trimet_view_init(void)
         return;
     }
     init_pages();
+    if (s_page_count == 0) {
+        ESP_LOGE(TAG, "no stops configured");
+        return;
+    }
 
     s_scr = lv_obj_create(NULL);
     lv_obj_clear_flag(s_scr, LV_OBJ_FLAG_SCROLLABLE);
@@ -447,8 +449,9 @@ void trimet_view_init(void)
     s_clock = make_label(s_scr, &lv_font_montserrat_26, COLOR_SUBTLE);
     lv_obj_align(s_clock, LV_ALIGN_TOP_RIGHT, -MARGIN, 22);
 
-    build_page(&s_pages[0]);
-    build_page(&s_pages[1]);
+    for (int i = 0; i < s_page_count; i++) {
+        build_page(&s_pages[i]);
+    }
 
     s_status = make_label(s_scr, &lv_font_montserrat_14, COLOR_DIM);
     lv_obj_align(s_status, LV_ALIGN_BOTTOM_LEFT, MARGIN, -10);
@@ -478,16 +481,16 @@ void trimet_view_init(void)
         lv_obj_align(icon, LV_ALIGN_BOTTOM_RIGHT, -MARGIN, -8);
     }
 
-    for (int i = 0; i < 2; i++) {
+    /* One dot per page, centered, 20 px apart. */
+    for (int i = 0; i < s_page_count; i++) {
         s_dots[i] = plain_obj(s_scr);
         lv_obj_set_size(s_dots[i], 10, 10);
         lv_obj_set_style_radius(s_dots[i], LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_opa(s_dots[i], LV_OPA_COVER, 0);
-        lv_obj_align(s_dots[i], LV_ALIGN_BOTTOM_MID, i == 0 ? -10 : 10, -14);
-    }
-    if (s_pages[0].stop_count == 0 || s_pages[1].stop_count == 0) {
-        lv_obj_add_flag(s_dots[0], LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(s_dots[1], LV_OBJ_FLAG_HIDDEN);
+        lv_obj_align(s_dots[i], LV_ALIGN_BOTTOM_MID, (2 * i - (s_page_count - 1)) * 10, -14);
+        if (s_page_count == 1) {
+            lv_obj_add_flag(s_dots[i], LV_OBJ_FLAG_HIDDEN);
+        }
     }
 
     lv_timer_create(refresh_timer_cb, REFRESH_MS, NULL);
@@ -499,8 +502,7 @@ void trimet_view_init(void)
 
     render();
     lv_disp_load_scr(s_scr);
-    ESP_LOGI(TAG, "streetcar stops: %d, MAX stops: %d, rotate every %d s",
-             s_pages[0].stop_count, s_pages[1].stop_count, CONFIG_TRIMET_PAGE_ROTATE_SEC);
+    ESP_LOGI(TAG, "%d pages, rotate every %d s", s_page_count, CONFIG_TRIMET_PAGE_ROTATE_SEC);
 }
 
 lv_obj_t *trimet_view_screen(void)

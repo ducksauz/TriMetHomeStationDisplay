@@ -85,12 +85,12 @@ GET https://developer.trimet.org/ws/v2/arrivals?locIDs=<id1,id2,...>&appID=<APP_
 | Option | Default | Notes |
 |--------|---------|-------|
 | `CONFIG_TRIMET_APP_ID` | *(empty)* | Your TriMet appID. **Secret.** |
-| `CONFIG_TRIMET_STREETCAR_STOP_IDS` | `10772,10754` | Streetcar page (max 4 stops; streetcar arrivals only) |
-| `CONFIG_TRIMET_MAX_STOP_IDS` | `7601,7763,8339,8378` | MAX page (max 4 stops; light rail only, so shuttle buses are hidden) |
+| `CONFIG_TRIMET_STREETCAR_STOP_IDS` | `10772,10754` | Streetcar page(s), 2 stops per page; streetcar arrivals only |
+| `CONFIG_TRIMET_MAX_STOP_IDS` | `7601,7763,8339,8378` | MAX page(s), 2 stops per page; light rail only, so shuttle buses are hidden |
 | `CONFIG_TRIMET_PAGE_ROTATE_SEC` | `15` | Time each page is shown, 5–120 s |
 | `CONFIG_TRIMET_POLL_INTERVAL_SEC` | `30` | 15–300 s |
 
-Values are saved in `sdkconfig`, which is git-ignored. Changing a default in `Kconfig.projbuild` doesn't update an existing `sdkconfig`; change the value in menuconfig as well. Never put the appID in `sdkconfig.defaults`, because that file is committed. At boot the firmware logs whether the appID is set, without printing the appID itself.
+Streetcar and MAX stops together can total at most 8. Values are saved in `sdkconfig`, which is git-ignored. Changing a default in `Kconfig.projbuild` doesn't update an existing `sdkconfig`; change the value in menuconfig as well. Never put the appID in `sdkconfig.defaults`, because that file is committed. At boot the firmware logs whether the appID is set, without printing the appID itself.
 
 ## Code layout
 
@@ -112,7 +112,12 @@ Values are saved in `sdkconfig`, which is git-ignored. Changing a default in `Kc
 
 ## Screen
 
-There are two pages, **Streetcar** and **MAX**. They alternate every 15 s. Each page shows its stops and their arrivals in the next 60 min. A page with 1–2 stops shows 3 arrivals per stop. A page with 3–4 stops (the MAX page) uses a compact layout with 2 arrivals per stop:
+Stops are shown 2 per page, with up to 3 arrivals per stop in the next 60 min. A stop list longer than 2 continues on another page with the same title. With the defaults there are three pages, each shown for 15 s:
+
+1. **Streetcar**: NW 10th & Glisan, NW 11th & Glisan
+2. **MAX**: Union Station (5th & Glisan, 6th & Hoyt): Yellow, Orange
+3. **MAX**: Old Town/Chinatown, both directions: Red, Blue
+
 
 ```
  Streetcar                          9:41 PM
@@ -122,10 +127,10 @@ There are two pages, **Streetcar** and **MAX**. They alternate every 15 s. Each 
  NW 11th & Glisan                Southbound
  [ NS ]  South Waterfront             4 min
  [ B  ]  Lloyd via OMSI                 Due
- Updated 8s ago     o O    Gray = scheduled  [cog]
+ Updated 8s ago    o O o   Gray = scheduled  [cog]
 ```
 
-- **Touch:** tap anywhere inside the center region (100 px border on all sides) to switch pages. The 15 s timer restarts on each tap. The 100 px border is reserved for other touch targets.
+- **Touch:** tap anywhere inside the center region (100 px border on all sides) to go to the next page. The 15 s timer restarts on each tap. The 100 px border is reserved for other touch targets.
 - **Settings:** the cog in the bottom-right corner opens Settings. The Wi-Fi entry shows the current network and opens the template's Wi-Fi setup screen; its back button returns to Settings.
 - **ETA colors:** white = live estimate, gray = scheduled only, amber = delayed, red = canceled.
 - **Countdowns:** computed from TriMet's server time plus the time elapsed since the fetch, so they don't depend on the device clock.

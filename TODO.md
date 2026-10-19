@@ -39,8 +39,9 @@
 - [x] Recompute "minutes away" every second between polls
 - [x] "Updated Ns ago" footer with stale/error states
 - [x] Verify layout on device (normal layout)
-- [x] Add Old Town/Chinatown (Red, Blue) to the MAX page with a compact 4-stop layout
-- [ ] Verify compact MAX layout and settings screen on device
+- [x] Add Old Town/Chinatown (Red, Blue) as a second MAX page (stop lists split 2 per page)
+- [x] Verify settings screen and Wi-Fi round trip on device
+- [ ] Verify the second MAX page on device
 - [x] Settings cog (bottom-right) with a Wi-Fi entry
 - [ ] Gate the first fetch on getting an IP address (it currently fails once with a DNS error, then retries after 5 s)
 - [x] Make LVGL updates thread-safe: the UI pulls snapshots from an LVGL timer, so the data task never touches LVGL
