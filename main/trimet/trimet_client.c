@@ -5,17 +5,17 @@
 #include <string.h>
 
 #include "esp_crt_bundle.h"
+#include "esp_event.h"
 #include "esp_heap_caps.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
+#include "esp_netif.h"
 #include "esp_timer.h"
+#include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
-
-#include "config.h"
-#include "view_data.h"
 
 #define TRIMET_URL_BASE      "https://developer.trimet.org/ws/v2/arrivals"
 #define TRIMET_LOOKAHEAD_MIN 60        /* "minutes" param; API max is 60 */
@@ -35,7 +35,7 @@ static trimet_arrivals_t       *s_latest;   /* last good result, guarded by s_mu
 static trimet_arrivals_t       *s_work;     /* poll task scratch */
 static trimet_client_status_t   s_status;   /* guarded by s_mutex */
 static bool                     s_have_data;
-static volatile bool            s_wifi_up;
+static volatile bool            s_have_ip;  /* station has an IP address */
 
 static const char *state_name(trimet_state_t s)
 {
@@ -194,7 +194,7 @@ static void poll_task(void *arg)
 {
     uint32_t retry_ms = RETRY_MIN_MS;
     const uint32_t poll_ms = CONFIG_TRIMET_POLL_INTERVAL_SEC * 1000;
-    TickType_t wait = portMAX_DELAY;   /* until Wi-Fi comes up */
+    TickType_t wait = portMAX_DELAY;   /* until the station gets an IP */
 
     for (;;) {
         trimet_state_t state;
@@ -202,7 +202,7 @@ static void poll_task(void *arg)
         char err[TRIMET_ERROR_LEN];
 
         ulTaskNotifyTake(pdTRUE, wait);
-        if (!s_wifi_up) {
+        if (!s_have_ip) {
             wait = portMAX_DELAY;
             continue;
         }
@@ -236,20 +236,25 @@ static void poll_task(void *arg)
     }
 }
 
-static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, void *data)
+/* Runs on the default event loop. Fetch as soon as there is an IP address;
+ * waiting only for Wi-Fi association made the first DNS lookup fail. */
+static void net_event_handler(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
-    static bool net_was_up;
-    const struct view_data_wifi_st *st = data;
-    bool wifi_was_up = s_wifi_up;
-
-    /* Gate on association, not st->is_network: that flag depends on pinging
-     * 8.8.8.8, which some networks block. Fetch failures back off on their own.
-     * Still fetch right away when internet reachability is confirmed. */
-    s_wifi_up = st->is_connected;
-    if ((s_wifi_up && !wifi_was_up) || (st->is_network && !net_was_up)) {
+    if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
+        s_have_ip = true;
         trimet_client_refresh();
+    } else {
+        /* WIFI_EVENT_STA_DISCONNECTED or IP_EVENT_STA_LOST_IP */
+        s_have_ip = false;
     }
-    net_was_up = st->is_network;
+}
+
+static bool sta_has_ip(void)
+{
+    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    esp_netif_ip_info_t ip;
+
+    return netif && esp_netif_get_ip_info(netif, &ip) == ESP_OK && ip.ip.addr != 0;
 }
 
 esp_err_t trimet_client_start(void)
@@ -272,12 +277,22 @@ esp_err_t trimet_client_start(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(
-        view_event_handle, VIEW_EVENT_BASE, VIEW_EVENT_WIFI_ST,
-        wifi_event_handler, NULL, NULL));
-
     if (xTaskCreate(poll_task, "trimet", TASK_STACK, NULL, TASK_PRIO, &s_task) != pdPASS) {
         return ESP_ERR_NO_MEM;
+    }
+
+    /* The default event loop is created by the template's Wi-Fi init. */
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
+                                                        net_event_handler, NULL, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_LOST_IP,
+                                                        net_event_handler, NULL, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED,
+                                                        net_event_handler, NULL, NULL));
+
+    /* In case the IP arrived before the handlers were registered. */
+    if (sta_has_ip()) {
+        s_have_ip = true;
+        trimet_client_refresh();
     }
     ESP_LOGI(TAG, "started: streetcar stops %s, MAX stops %s, every %d s",
              CONFIG_TRIMET_STREETCAR_STOP_IDS, CONFIG_TRIMET_MAX_STOP_IDS, CONFIG_TRIMET_POLL_INTERVAL_SEC);

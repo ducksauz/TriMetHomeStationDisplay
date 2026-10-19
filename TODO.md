@@ -43,7 +43,7 @@
 - [x] Verify settings screen and Wi-Fi round trip on device
 - [ ] Verify the second MAX page on device
 - [x] Settings cog (bottom-right) with a Wi-Fi entry
-- [ ] Gate the first fetch on getting an IP address (it currently fails once with a DNS error, then retries after 5 s)
+- [x] Gate fetches on having an IP address (`IP_EVENT_STA_GOT_IP`), so the first fetch no longer fails with a DNS error
 - [x] Make LVGL updates thread-safe: the UI pulls snapshots from an LVGL timer, so the data task never touches LVGL
 
 ## 5. Polish

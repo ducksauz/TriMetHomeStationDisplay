@@ -55,12 +55,13 @@ void app_main(void)
     trimet_view_init();     /* replaces the template's time screen as the start screen */
     lv_port_sem_give();
 
-    /* Before the model so it sees the first Wi-Fi status event. */
+    indicator_model_init();
+
+    /* After the model: needs the default event loop created by its Wi-Fi init. */
     if (trimet_client_start() != ESP_OK) {
         ESP_LOGE(TAG, "TriMet client not started; run 'idf.py menuconfig' > TriMet Station Display");
     }
 
-    indicator_model_init();
     indicator_controller_init();
 
     static char buffer[128];    /* Make sure buffer is enough for `sprintf` */

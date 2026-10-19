@@ -33,7 +33,8 @@ typedef struct {
     int64_t        last_ok_uptime_ms; /* esp_timer uptime of last good fetch, 0 if never */
 } trimet_client_status_t;
 
-/* Start the polling task. Call after view_event_handle is created. */
+/* Start the polling task. Call after Wi-Fi is initialized (indicator_model_init),
+ * which creates the default event loop. */
 esp_err_t trimet_client_start(void);
 
 /*
