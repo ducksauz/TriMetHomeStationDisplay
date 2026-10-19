@@ -1,0 +1,25 @@
+/*
+ * Settings screen, opened from the cog on the arrivals screen. Currently has
+ * a Wi-Fi entry that opens the template's Wi-Fi setup screen.
+ */
+#ifndef TRIMET_SETTINGS_H
+#define TRIMET_SETTINGS_H
+
+#include "lvgl.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Create the screen. back_target is where the back button returns.
+ * Call with the LVGL lock held. */
+void trimet_settings_init(lv_obj_t *back_target);
+
+/* Show the settings screen. Call from the LVGL task. */
+void trimet_settings_open(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

@@ -177,6 +177,7 @@ LV_FONT_DECLARE( ui_font_font3);
 LV_FONT_DECLARE( ui_font_font4);
 
 void ui_init(void);
+void ui_set_screen_last(lv_obj_t *screen);
 
 #ifdef __cplusplus
 } /*extern "C"*/

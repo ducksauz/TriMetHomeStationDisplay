@@ -9,23 +9,27 @@ menu "TriMet Station Display"
             Do not put it in sdkconfig.defaults.
 
     config TRIMET_STREETCAR_STOP_IDS
-        string "Streetcar page stop IDs (comma-separated, max 2)"
+        string "Streetcar page stop IDs (comma-separated, max 4)"
         default "10772,10754"
         help
             Stops shown on the Streetcar page. Only streetcar arrivals are shown.
+            With 3-4 stops the page uses a compact layout (2 arrivals per stop).
             Defaults:
               10772  NW 10th & Glisan (northbound)
               10754  NW 11th & Glisan (southbound)
 
     config TRIMET_MAX_STOP_IDS
-        string "MAX page stop IDs (comma-separated, max 2)"
-        default "7601,7763"
+        string "MAX page stop IDs (comma-separated, max 4)"
+        default "7601,7763,8339,8378"
         help
             Stops shown on the MAX page. Only light rail arrivals are shown,
             so the 291/293 shuttle buses at these stops are hidden.
+            With 3-4 stops the page uses a compact layout (2 arrivals per stop).
             Defaults:
               7601  Union Station/NW 5th & Glisan MAX (southbound)
               7763  Union Station/NW 6th & Hoyt MAX (northbound)
+              8339  Old Town/Chinatown MAX (northbound; Red, Blue)
+              8378  Old Town/Chinatown MAX (southbound; Red, Blue)
 
     config TRIMET_POLL_INTERVAL_SEC
         int "Arrivals poll interval (seconds)"

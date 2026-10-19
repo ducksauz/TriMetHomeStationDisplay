@@ -26,7 +26,7 @@
 - [x] Build the Arrivals V2 request (`locIDs`, `appID`, `minutes=60`)
 - [x] Parse the JSON with cJSON, reading the response into a growable PSRAM buffer (64 KB cap)
 - [x] Map the response into a compact struct: stop, route, sign, `estimated`/`scheduled`, status, color
-- [x] Filter which arrivals to show: by mode per page, within 90 min, 3 per stop
+- [x] Filter which arrivals to show: by mode per page, within 60 min, 3 per stop (2 in compact layout)
 - [x] Confirm the `locid` field on arrivals against a live response
 - [x] Handle errors (HTTP 403, malformed JSON, `resultSet.error`) and keep the last good data; back off 5 s doubling up to the poll interval
 - [x] Polling task, decoupled from the UI (`trimet_client_get()` returns a snapshot)
@@ -38,8 +38,10 @@
 - [x] Show status visually: estimated vs. scheduled-only, delayed, canceled
 - [x] Recompute "minutes away" every second between polls
 - [x] "Updated Ns ago" footer with stale/error states
-- [ ] Verify layout on device; tune fonts/spacing
-- [ ] Wire a border touch zone to the Wi-Fi setup screen (currently unreachable from the arrivals screen)
+- [x] Verify layout on device (normal layout)
+- [x] Add Old Town/Chinatown (Red, Blue) to the MAX page with a compact 4-stop layout
+- [ ] Verify compact MAX layout and settings screen on device
+- [x] Settings cog (bottom-right) with a Wi-Fi entry
 - [ ] Gate the first fetch on getting an IP address (it currently fails once with a DNS error, then retries after 5 s)
 - [x] Make LVGL updates thread-safe: the UI pulls snapshots from an LVGL timer, so the data task never touches LVGL
 

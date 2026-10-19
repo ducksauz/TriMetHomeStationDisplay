@@ -28,10 +28,12 @@ Stop IDs and route lists come from the TriMet GTFS feed (`stops.txt`, `stop_time
 | 10754 | NW 11th & Glisan | Southbound | Streetcar | NS Line, B Loop |
 | 7601 | Union Station/NW 5th & Glisan MAX Stn | Southbound | MAX | Yellow, Orange |
 | 7763 | Union Station/NW 6th & Hoyt MAX Stn | Northbound | MAX | Yellow |
+| 8339 | Old Town/Chinatown MAX Station | Northbound | MAX | Red, Blue |
+| 8378 | Old Town/Chinatown MAX Station | Southbound | MAX | Red, Blue |
 
 The MAX stops are also served by shuttle buses 291 (Orange) and 293 (Yellow). These appear to be service-disruption shuttles.
 
-All four stops fit in a single request: `locIDs=10772,10754,7601,7763`.
+All six stops fit in a single request: `locIDs=10772,10754,7601,7763,8339,8378`.
 
 ## TriMet Arrivals V2 API
 
@@ -83,12 +85,12 @@ GET https://developer.trimet.org/ws/v2/arrivals?locIDs=<id1,id2,...>&appID=<APP_
 | Option | Default | Notes |
 |--------|---------|-------|
 | `CONFIG_TRIMET_APP_ID` | *(empty)* | Your TriMet appID. **Secret.** |
-| `CONFIG_TRIMET_STREETCAR_STOP_IDS` | `10772,10754` | Streetcar page (max 2 stops; streetcar arrivals only) |
-| `CONFIG_TRIMET_MAX_STOP_IDS` | `7601,7763` | MAX page (max 2 stops; light rail only, so shuttle buses are hidden) |
+| `CONFIG_TRIMET_STREETCAR_STOP_IDS` | `10772,10754` | Streetcar page (max 4 stops; streetcar arrivals only) |
+| `CONFIG_TRIMET_MAX_STOP_IDS` | `7601,7763,8339,8378` | MAX page (max 4 stops; light rail only, so shuttle buses are hidden) |
 | `CONFIG_TRIMET_PAGE_ROTATE_SEC` | `15` | Time each page is shown, 5–120 s |
 | `CONFIG_TRIMET_POLL_INTERVAL_SEC` | `30` | 15–300 s |
 
-Values are saved in `sdkconfig`, which is git-ignored. Never put the appID in `sdkconfig.defaults`, because that file is committed. At boot the firmware logs whether the appID is set, without printing the appID itself.
+Values are saved in `sdkconfig`, which is git-ignored. Changing a default in `Kconfig.projbuild` doesn't update an existing `sdkconfig`; change the value in menuconfig as well. Never put the appID in `sdkconfig.defaults`, because that file is committed. At boot the firmware logs whether the appID is set, without printing the appID itself.
 
 ## Code layout
 
@@ -98,6 +100,7 @@ Values are saved in `sdkconfig`, which is git-ignored. Never put the appID in `s
 | `main/trimet/trimet_client.{c,h}` | HTTPS fetch + polling task; `trimet_client_get()` returns the last good snapshot and status |
 | `main/trimet/trimet_format.{c,h}` | Display logic: sign → badge/destination, line colors, arrival selection, ETA text (host-testable) |
 | `main/trimet/trimet_view.{c,h}` | LVGL arrivals screen (the start screen) |
+| `main/trimet/trimet_settings.{c,h}` | Settings screen (opened from the cog); Wi-Fi entry opens the template's Wi-Fi screen |
 | `main/model`, `main/view`, `main/ui` | From the Seeed template (Wi-Fi, time, display, demo UI) |
 | `test/host/` | Host unit tests for the parser, run against a captured live response |
 
@@ -109,7 +112,7 @@ Values are saved in `sdkconfig`, which is git-ignored. Never put the appID in `s
 
 ## Screen
 
-There are two pages, **Streetcar** and **MAX**. They alternate every 15 s. Each page shows its stops, with up to 3 arrivals per stop within the next 90 min:
+There are two pages, **Streetcar** and **MAX**. They alternate every 15 s. Each page shows its stops and their arrivals in the next 60 min. A page with 1–2 stops shows 3 arrivals per stop. A page with 3–4 stops (the MAX page) uses a compact layout with 2 arrivals per stop:
 
 ```
  Streetcar                          9:41 PM
@@ -119,10 +122,11 @@ There are two pages, **Streetcar** and **MAX**. They alternate every 15 s. Each 
  NW 11th & Glisan                Southbound
  [ NS ]  South Waterfront             4 min
  [ B  ]  Lloyd via OMSI                 Due
- Updated 8s ago          o O       Gray = scheduled
+ Updated 8s ago     o O    Gray = scheduled  [cog]
 ```
 
 - **Touch:** tap anywhere inside the center region (100 px border on all sides) to switch pages. The 15 s timer restarts on each tap. The 100 px border is reserved for other touch targets.
+- **Settings:** the cog in the bottom-right corner opens Settings. The Wi-Fi entry shows the current network and opens the template's Wi-Fi setup screen; its back button returns to Settings.
 - **ETA colors:** white = live estimate, gray = scheduled only, amber = delayed, red = canceled.
 - **Countdowns:** computed from TriMet's server time plus the time elapsed since the fetch, so they don't depend on the device clock.
 - **Footer:** shows how long ago data was fetched. It turns amber when the data is stale (more than 2 missed polls).
@@ -158,6 +162,8 @@ Board config lives in `sdkconfig.defaults` (`CONFIG_LCD_BOARD_SENSECAP_INDICATOR
 - Board set to D1/D1S (upstream defaults to D1L/LoRa)
 - Project renamed to `trimet_station_display`
 - Added the missing `#include "esp_timer.h"` in `main/model/indicator_time.c` and `indicator_btn.c`, which are required on IDF 5.1.7
+- Added `ui_set_screen_last()` to `main/ui/ui.c`, so the Wi-Fi screen's back button can return to our screens
+- `main.c` loads the arrivals screen at startup instead of the template's time screen
 
 ## Project status
 

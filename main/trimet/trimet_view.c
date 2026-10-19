@@ -12,25 +12,23 @@
 
 #include "trimet_client.h"
 #include "trimet_format.h"
+#include "trimet_settings.h"
+#include "ui.h"
 
 #define SCREEN_W        480
 #define SCREEN_H        480
 #define MARGIN          16
 
-#define HEADER_H        64
-#define SECTION_Y0      72
-#define SECTION_H       182
-#define SECTION_GAP     6
-#define SECTION_HDR_H   32
-#define ROW_H           50
-#define BADGE_W         92
-#define BADGE_H         38
-#define ETA_W           112
+#define SECTION_Y0      70
+#define BODY_BOTTOM     442    /* sections must end above the footer */
 
-#define STOPS_PER_PAGE  2
-#define ROWS_PER_STOP   3
-#define MAX_MINUTES     90     /* hide arrivals further out than this */
+#define STOPS_PER_PAGE  4
+#define MAX_ROWS        3      /* rows per stop in the roomiest layout */
+#define MAX_MINUTES     60     /* hide arrivals further out than this */
 #define REFRESH_MS      1000
+
+#define COG_W           64     /* settings button hit area, bottom-right corner */
+#define COG_H           44
 
 #define COLOR_BG        0x0B0E11
 #define COLOR_TEXT      0xFFFFFF
@@ -42,12 +40,34 @@
 
 static const char *TAG = "trimet-view";
 
+/* Section geometry and fonts. Pages with 1-2 stops use the normal layout,
+ * 3-4 stops the compact one. */
 typedef struct {
-    const char    *title;
-    trimet_mode_t  mode;
-    uint32_t       stops[STOPS_PER_PAGE];
-    int            stop_count;
-} page_t;
+    int               rows;        /* arrivals per stop */
+    int               hdr_h;       /* stop name row */
+    int               row_h;
+    int               gap;         /* between sections */
+    int               badge_w, badge_h;
+    int               eta_w;
+    int               empty_y;     /* "No arrivals" offset below the header */
+    const lv_font_t  *name_font, *dir_font, *badge_font, *dest_font, *eta_font, *empty_font;
+} layout_t;
+
+static const layout_t LAYOUT_NORMAL = {
+    .rows = 3, .hdr_h = 32, .row_h = 50, .gap = 6,
+    .badge_w = 92, .badge_h = 38, .eta_w = 112, .empty_y = 14,
+    .name_font = &lv_font_montserrat_20, .dir_font = &lv_font_montserrat_16,
+    .badge_font = &lv_font_montserrat_20, .dest_font = &lv_font_montserrat_22,
+    .eta_font = &lv_font_montserrat_28, .empty_font = &lv_font_montserrat_18,
+};
+
+static const layout_t LAYOUT_COMPACT = {
+    .rows = 2, .hdr_h = 24, .row_h = 33, .gap = 3,
+    .badge_w = 84, .badge_h = 28, .eta_w = 96, .empty_y = 6,
+    .name_font = &lv_font_montserrat_16, .dir_font = &lv_font_montserrat_14,
+    .badge_font = &lv_font_montserrat_16, .dest_font = &lv_font_montserrat_18,
+    .eta_font = &lv_font_montserrat_22, .empty_font = &lv_font_montserrat_16,
+};
 
 typedef struct {
     lv_obj_t *row;
@@ -62,8 +82,18 @@ typedef struct {
     lv_obj_t *name;
     lv_obj_t *dir;
     lv_obj_t *empty;
-    row_t     rows[ROWS_PER_STOP];
+    row_t     rows[MAX_ROWS];
 } section_t;
+
+typedef struct {
+    const char     *title;
+    trimet_mode_t   mode;
+    uint32_t        stops[STOPS_PER_PAGE];
+    int             stop_count;
+    const layout_t *layout;
+    lv_obj_t       *cont;
+    section_t       sections[STOPS_PER_PAGE];
+} page_t;
 
 static page_t     s_pages[2];
 static int        s_page;
@@ -73,7 +103,6 @@ static lv_obj_t  *s_clock;
 static lv_obj_t  *s_status;
 static lv_obj_t  *s_legend;
 static lv_obj_t  *s_dots[2];
-static section_t  s_sections[STOPS_PER_PAGE];
 static lv_timer_t *s_rotate_timer;
 static trimet_arrivals_t *s_data;   /* PSRAM copy of the client's snapshot */
 
@@ -161,18 +190,18 @@ static void render_clock(void)
     set_text(s_clock, buf);
 }
 
-static void render_section(section_t *sec, uint32_t loc_id, trimet_mode_t mode,
+static void render_section(const page_t *page, section_t *sec, uint32_t loc_id,
                            bool have_data, int64_t now_ms, bool *any_scheduled)
 {
-    const trimet_arrival_t *sel[ROWS_PER_STOP];
+    const trimet_arrival_t *sel[MAX_ROWS];
+    const int rows = page->layout->rows;
     const trimet_location_t *loc = NULL;
     char name[TRIMET_DESC_LEN];
     int n = 0;
 
-    set_hidden(sec->cont, false);
     if (have_data) {
         loc = trimet_find_location(s_data, loc_id);
-        n = trimet_select(s_data, loc_id, mode, now_ms, MAX_MINUTES, sel, ROWS_PER_STOP);
+        n = trimet_select(s_data, loc_id, page->mode, now_ms, MAX_MINUTES, sel, rows);
     }
     if (have_data) {
         trimet_format_stop_name(s_data, loc_id, name, sizeof(name));
@@ -182,7 +211,7 @@ static void render_section(section_t *sec, uint32_t loc_id, trimet_mode_t mode,
     set_text(sec->name, name);
     set_text(sec->dir, loc ? loc->dir : "");
 
-    for (int i = 0; i < ROWS_PER_STOP; i++) {
+    for (int i = 0; i < rows; i++) {
         row_t *r = &sec->rows[i];
         char badge[TRIMET_BADGE_LEN], dest[TRIMET_SIGN_LEN], eta[16];
         uint32_t color;
@@ -246,7 +275,7 @@ static void render(void)
 {
     trimet_client_status_t st;
     bool have_data = trimet_client_get(s_data, &st);
-    const page_t *page = &s_pages[s_page];
+    page_t *page = &s_pages[s_page];
     int64_t now_ms = 0;
     bool any_scheduled = false;
 
@@ -258,13 +287,12 @@ static void render(void)
     set_text(s_title, page->title);
     for (int i = 0; i < 2; i++) {
         set_bg_color(s_dots[i], i == s_page ? COLOR_TEXT : COLOR_DOT_OFF);
-    }
-    for (int i = 0; i < STOPS_PER_PAGE; i++) {
-        if (i < page->stop_count) {
-            render_section(&s_sections[i], page->stops[i], page->mode, have_data, now_ms, &any_scheduled);
-        } else {
-            set_hidden(s_sections[i].cont, true);
+        if (s_pages[i].cont) {
+            set_hidden(s_pages[i].cont, i != s_page);
         }
+    }
+    for (int i = 0; i < page->stop_count; i++) {
+        render_section(page, &page->sections[i], page->stops[i], have_data, now_ms, &any_scheduled);
     }
     set_hidden(s_legend, !any_scheduled);
     render_status(have_data, &st);
@@ -299,6 +327,11 @@ static void rotate_timer_cb(lv_timer_t *t)
     }
 }
 
+static void cog_event_cb(lv_event_t *e)
+{
+    trimet_settings_open();
+}
+
 static void screen_event_cb(lv_event_t *e)
 {
     lv_point_t p;
@@ -317,51 +350,66 @@ static void screen_event_cb(lv_event_t *e)
 
 /* ---- construction ---- */
 
-static void build_section(section_t *sec, int index)
+static void build_section(page_t *page, section_t *sec, int index)
 {
-    sec->cont = plain_obj(s_scr);
-    lv_obj_set_pos(sec->cont, 0, SECTION_Y0 + index * (SECTION_H + SECTION_GAP));
-    lv_obj_set_size(sec->cont, SCREEN_W, SECTION_H);
+    const layout_t *L = page->layout;
+    const int sec_h = L->hdr_h + L->rows * L->row_h;
 
-    sec->name = make_label(sec->cont, &lv_font_montserrat_20, COLOR_SUBTLE);
+    sec->cont = plain_obj(page->cont);
+    lv_obj_set_pos(sec->cont, 0, index * (sec_h + L->gap));
+    lv_obj_set_size(sec->cont, SCREEN_W, sec_h);
+
+    sec->name = make_label(sec->cont, L->name_font, COLOR_SUBTLE);
     lv_label_set_long_mode(sec->name, LV_LABEL_LONG_DOT);
     lv_obj_set_width(sec->name, SCREEN_W - 2 * MARGIN - 120);
-    lv_obj_set_pos(sec->name, MARGIN, 4);
+    lv_obj_align(sec->name, LV_ALIGN_TOP_LEFT, MARGIN, (L->hdr_h - lv_font_get_line_height(L->name_font)) / 2);
 
-    sec->dir = make_label(sec->cont, &lv_font_montserrat_16, COLOR_DIM);
-    lv_obj_align(sec->dir, LV_ALIGN_TOP_RIGHT, -MARGIN, 8);
+    sec->dir = make_label(sec->cont, L->dir_font, COLOR_DIM);
+    lv_obj_align(sec->dir, LV_ALIGN_TOP_RIGHT, -MARGIN, (L->hdr_h - lv_font_get_line_height(L->dir_font)) / 2);
 
-    sec->empty = make_label(sec->cont, &lv_font_montserrat_18, COLOR_DIM);
+    sec->empty = make_label(sec->cont, L->empty_font, COLOR_DIM);
     lv_label_set_text_fmt(sec->empty, "No arrivals in the next %d min", MAX_MINUTES);
-    lv_obj_set_pos(sec->empty, MARGIN, SECTION_HDR_H + 14);
+    lv_obj_set_pos(sec->empty, MARGIN, L->hdr_h + L->empty_y);
 
-    for (int i = 0; i < ROWS_PER_STOP; i++) {
+    for (int i = 0; i < L->rows; i++) {
         row_t *r = &sec->rows[i];
 
         r->row = plain_obj(sec->cont);
-        lv_obj_set_pos(r->row, 0, SECTION_HDR_H + i * ROW_H);
-        lv_obj_set_size(r->row, SCREEN_W, ROW_H);
+        lv_obj_set_pos(r->row, 0, L->hdr_h + i * L->row_h);
+        lv_obj_set_size(r->row, SCREEN_W, L->row_h);
 
         r->badge = plain_obj(r->row);
-        lv_obj_set_size(r->badge, BADGE_W, BADGE_H);
+        lv_obj_set_size(r->badge, L->badge_w, L->badge_h);
         lv_obj_align(r->badge, LV_ALIGN_LEFT_MID, MARGIN, 0);
-        lv_obj_set_style_radius(r->badge, 8, 0);
+        lv_obj_set_style_radius(r->badge, L->badge_h / 5, 0);
         lv_obj_set_style_bg_opa(r->badge, LV_OPA_COVER, 0);
 
-        r->badge_label = make_label(r->badge, &lv_font_montserrat_20, COLOR_TEXT);
+        r->badge_label = make_label(r->badge, L->badge_font, COLOR_TEXT);
         lv_obj_center(r->badge_label);
 
-        r->dest = make_label(r->row, &lv_font_montserrat_22, COLOR_TEXT);
+        r->dest = make_label(r->row, L->dest_font, COLOR_TEXT);
         lv_label_set_long_mode(r->dest, LV_LABEL_LONG_DOT);
-        lv_obj_set_width(r->dest, SCREEN_W - (MARGIN + BADGE_W + 12) - ETA_W - MARGIN);
-        lv_obj_align(r->dest, LV_ALIGN_LEFT_MID, MARGIN + BADGE_W + 12, 0);
+        lv_obj_set_width(r->dest, SCREEN_W - (MARGIN + L->badge_w + 12) - L->eta_w - MARGIN);
+        lv_obj_align(r->dest, LV_ALIGN_LEFT_MID, MARGIN + L->badge_w + 12, 0);
 
-        r->eta = make_label(r->row, &lv_font_montserrat_28, COLOR_TEXT);
-        lv_obj_set_width(r->eta, ETA_W);
+        r->eta = make_label(r->row, L->eta_font, COLOR_TEXT);
+        lv_obj_set_width(r->eta, L->eta_w);
         lv_obj_set_style_text_align(r->eta, LV_TEXT_ALIGN_RIGHT, 0);
         lv_obj_align(r->eta, LV_ALIGN_RIGHT_MID, -MARGIN, 0);
 
         lv_obj_add_flag(r->row, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+static void build_page(page_t *page)
+{
+    page->layout = page->stop_count <= 2 ? &LAYOUT_NORMAL : &LAYOUT_COMPACT;
+    page->cont = plain_obj(s_scr);
+    lv_obj_set_pos(page->cont, 0, SECTION_Y0);
+    lv_obj_set_size(page->cont, SCREEN_W, BODY_BOTTOM - SECTION_Y0);
+    lv_obj_add_flag(page->cont, LV_OBJ_FLAG_HIDDEN);
+    for (int i = 0; i < page->stop_count; i++) {
+        build_section(page, &page->sections[i], i);
     }
 }
 
@@ -399,16 +447,36 @@ void trimet_view_init(void)
     s_clock = make_label(s_scr, &lv_font_montserrat_26, COLOR_SUBTLE);
     lv_obj_align(s_clock, LV_ALIGN_TOP_RIGHT, -MARGIN, 22);
 
-    for (int i = 0; i < STOPS_PER_PAGE; i++) {
-        build_section(&s_sections[i], i);
-    }
+    build_page(&s_pages[0]);
+    build_page(&s_pages[1]);
 
     s_status = make_label(s_scr, &lv_font_montserrat_14, COLOR_DIM);
     lv_obj_align(s_status, LV_ALIGN_BOTTOM_LEFT, MARGIN, -10);
 
     s_legend = make_label(s_scr, &lv_font_montserrat_14, COLOR_DIM);
     lv_label_set_text(s_legend, "Gray = scheduled");
-    lv_obj_align(s_legend, LV_ALIGN_BOTTOM_RIGHT, -MARGIN, -10);
+    lv_obj_align(s_legend, LV_ALIGN_BOTTOM_RIGHT, -COG_W, -10);
+
+    /* Settings cog in the bottom-right corner (inside the tap-zone border). */
+    {
+        lv_obj_t *cog = lv_obj_create(s_scr);
+        lv_obj_t *icon;
+
+        lv_obj_remove_style_all(cog);
+        lv_obj_add_flag(cog, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_clear_flag(cog, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_size(cog, COG_W, COG_H);
+        lv_obj_align(cog, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
+        lv_obj_add_event_cb(cog, cog_event_cb, LV_EVENT_CLICKED, NULL);
+
+        /* Text color is set on the button so the icon inherits the pressed state. */
+        lv_obj_set_style_text_color(cog, lv_color_hex(COLOR_DIM), 0);
+        lv_obj_set_style_text_color(cog, lv_color_hex(COLOR_TEXT), LV_STATE_PRESSED);
+        icon = lv_label_create(cog);
+        lv_obj_set_style_text_font(icon, &lv_font_montserrat_22, 0);
+        lv_label_set_text(icon, LV_SYMBOL_SETTINGS);
+        lv_obj_align(icon, LV_ALIGN_BOTTOM_RIGHT, -MARGIN, -8);
+    }
 
     for (int i = 0; i < 2; i++) {
         s_dots[i] = plain_obj(s_scr);
@@ -424,6 +492,10 @@ void trimet_view_init(void)
 
     lv_timer_create(refresh_timer_cb, REFRESH_MS, NULL);
     s_rotate_timer = lv_timer_create(rotate_timer_cb, CONFIG_TRIMET_PAGE_ROTATE_SEC * 1000, NULL);
+
+    trimet_settings_init(s_scr);
+    /* Also the fallback for the Wi-Fi screen's back button (e.g. first-boot setup). */
+    ui_set_screen_last(s_scr);
 
     render();
     lv_disp_load_scr(s_scr);

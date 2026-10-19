@@ -15,7 +15,7 @@
 extern "C" {
 #endif
 
-#define TRIMET_MAX_ARRIVALS   32
+#define TRIMET_MAX_ARRIVALS   48
 #define TRIMET_MAX_LOCATIONS  8
 #define TRIMET_SIGN_LEN       72
 #define TRIMET_DESC_LEN       48

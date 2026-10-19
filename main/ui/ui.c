@@ -149,6 +149,12 @@ lv_chart_series_t * ui_sensor_chart_week_series_low;
 
 
 static lv_obj_t *ui_screen_last;
+
+/* Where the Wi-Fi screen's back button returns to (added for the TriMet display). */
+void ui_set_screen_last(lv_obj_t *screen)
+{
+    ui_screen_last = screen;
+}
 ///////////////////// TEST LVGL SETTINGS ////////////////////
 #if LV_COLOR_DEPTH != 16
     #error "LV_COLOR_DEPTH should be 16bit to match SquareLine Studio's settings"
