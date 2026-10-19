@@ -106,4 +106,4 @@ Board config lives in `sdkconfig.defaults` (`CONFIG_LCD_BOARD_SENSECAP_INDICATOR
 
 ## Project status
 
-The template is imported and builds on ESP-IDF v5.1.7. It hasn't been flashed to hardware yet. See [TODO.md](TODO.md).
+The template is imported, builds on ESP-IDF v5.1.7, and runs on the D1S. The demo UI displays correctly. See [TODO.md](TODO.md).

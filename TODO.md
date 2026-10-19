@@ -11,8 +11,9 @@
 ## 1. Project setup
 - [x] `git init`, add `.gitignore` (build/, sdkconfig, secrets)
 - [x] Import the template and confirm it builds
-- [ ] Flash to the D1S and confirm it boots (check the screen setting GX vs DX if the display looks wrong)
-- [ ] Confirm the display and touch work with the template's LVGL demo
+- [x] Flash to the D1S and confirm it boots (GX screen setting is correct)
+- [x] Confirm the display works with the template's LVGL demo
+- [ ] Confirm touch works
 - [ ] Add a Kconfig menu (or `secrets.h`) for Wi-Fi SSID/password, `appID` and stop IDs
 
 ## 2. Connectivity
