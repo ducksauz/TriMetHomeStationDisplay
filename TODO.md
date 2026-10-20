@@ -63,7 +63,7 @@
 - [x] OTA updates: Settings > Firmware checks the latest GitHub release and installs it; rollback if the new image restarts within 5 min or never fetches arrivals
 - [x] appID entered on the device only (never compiled in); arrivals screen asks for it when missing or rejected
 - [x] Release workflow: tag v* builds and publishes app .bin, version.txt and a full flash image
-- [ ] Make the repo public, push a first release tag, and test an update and a rollback end to end
+- [x] Repo public; v1.1.0 and v1.1.1 released; tested update (v1.1.0-dirty -> v1.1.1), rollback on power cycle during probation (with the "undone" message), and marked good after 5 min
 - [ ] Optional: show service alerts/detours via the TriMet Alerts API
 
 ## 6. Docs
