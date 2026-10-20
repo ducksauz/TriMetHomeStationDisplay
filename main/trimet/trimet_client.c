@@ -13,6 +13,7 @@
 #include "esp_timer.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/idf_additions.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
@@ -296,7 +297,10 @@ esp_err_t trimet_client_start(void)
         return ESP_ERR_NO_MEM;
     }
 
-    if (xTaskCreate(poll_task, "trimet", TASK_STACK, NULL, TASK_PRIO, &s_task) != pdPASS) {
+    /* Stack in PSRAM to save internal RAM; this task never writes flash
+     * (which disables the cache, and with it PSRAM). */
+    if (xTaskCreateWithCaps(poll_task, "trimet", TASK_STACK, NULL, TASK_PRIO, &s_task,
+                            MALLOC_CAP_SPIRAM) != pdPASS) {
         return ESP_ERR_NO_MEM;
     }
 

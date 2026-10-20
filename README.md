@@ -208,6 +208,7 @@ Update checks need the repository to be public (or `CONFIG_TRIMET_OTA_URL` to po
 - After 30 min without arrivals (not counting a missing or rejected appID), the device restarts.
 - TLS uses software SHA/AES: in ESP-IDF 5.1 the hardware drivers flush the PSRAM cache without the lock the LCD driver uses, and the two cores deadlocked.
 - PSRAM and flash run at 80 MHz, not the template's 120 MHz. Octal PSRAM at 120 MHz is experimental and drifts out of timing as the chip warms up; a core dump showed a single-bit error reading a code constant from PSRAM. To leave enough PSRAM bandwidth for the screen, which streams its frame buffer from PSRAM, the LCD pixel clock is 14 MHz instead of 18.
+- Internal RAM is kept for what must be there (DMA buffers, task stacks that write flash). LVGL allocates from PSRAM, the TriMet poll and update-check tasks have PSRAM stacks, and the Wi-Fi driver runs from PSRAM rather than internal RAM. About 50 KB of internal RAM stays free, and at least 27 KB during an update check. The log reports free memory every 10 minutes and each task's unused stack every hour.
 - Each release includes `trimet_station_display.elf`. To decode a core dump from a release build, run `idf.py coredump-info` with that ELF (`esp-coredump info_corefile --core-format raw --core <dump> <elf>`); a local rebuild won't match because of build timestamps.
 
 ### Changes from the upstream template
@@ -219,6 +220,8 @@ Update checks need the repository to be public (or `CONFIG_TRIMET_OTA_URL` to po
 - `indicator_time.c`: `__time_zone_set()` uses `CONFIG_TRIMET_TZ` when set. The template's IP lookup sets a fixed UTC offset that doesn't follow DST, and it geolocates this device to Seattle.
 - `sdkconfig.defaults`: `CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y` puts TLS buffers in PSRAM. Internal RAM is shared with LVGL and ran out during concurrent HTTPS requests.
 - `sdkconfig.defaults`: reboot on panic, task watchdog panics, core dump to flash, app rollback, software SHA/AES (see Reliability).
+- `sdkconfig.defaults`: Wi-Fi IRAM optimizations, SoftAP, Enterprise and OWE off; IPC task stacks 2 KB instead of 4 KB (see Reliability).
+- `CMakeLists.txt`: LVGL's allocator (`LV_MEM_CUSTOM_ALLOC` etc.) uses PSRAM instead of plain `malloc`, which put small allocations in internal RAM.
 - `partitions.csv`: two OTA slots and a core dump partition instead of one 4 MB factory app.
 - `main/lv_port.c`: the LVGL task is watched by the task watchdog, and the direct-mode copy flushes the cache through `esp_cache_msync()` (which takes the cache lock).
 

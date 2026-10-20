@@ -1,14 +1,18 @@
 #include "trimet_health.h"
 
 #include <inttypes.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "esp_attr.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_memory_utils.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 #include "sdkconfig.h"
 #if CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
 #include "esp_core_dump.h"
@@ -21,6 +25,8 @@
 #define STORAGE_KEY      "trimet-health"
 #define CHECK_PERIOD_US  (60 * 1000 * 1000)
 #define HEAP_LOG_EVERY   10           /* checks, i.e. minutes */
+#define STACK_LOG_EVERY  60
+#define MAX_TASKS        40
 #define RTC_MAGIC        0x54524D48   /* "TRMH" */
 
 static const char *TAG = "trimet-health";
@@ -50,6 +56,7 @@ static crash_record_t     s_crash;      /* guarded by s_mutex */
 static bool               s_need_time;  /* this boot was a crash; fill in s_crash.time once the clock is set */
 static bool               s_coredump;
 static esp_timer_handle_t s_timer;
+static bool               s_logged_first_fetch;
 
 static bool is_unexpected(esp_reset_reason_t r, bool stale)
 {
@@ -96,15 +103,35 @@ static void save_crash(void)
     }
 }
 
-static void log_heap(uint32_t uptime_s)
+static void log_heap(const char *when)
 {
-    ESP_LOGI(TAG, "up %" PRIu32 " min; internal free %u (min %u, largest %u); PSRAM free %u (min %u)",
-             uptime_s / 60,
+    ESP_LOGI(TAG, "%s; internal free %u (min %u, largest %u); PSRAM free %u (min %u)",
+             when,
              heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
              heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
              heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
              heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
              heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM));
+}
+
+/* Each task's unused stack at its deepest so far, for sizing stacks. */
+static void log_stacks(void)
+{
+#if CONFIG_FREERTOS_USE_TRACE_FACILITY
+    TaskStatus_t *tasks = heap_caps_malloc(MAX_TASKS * sizeof(*tasks), MALLOC_CAP_SPIRAM);
+    UBaseType_t n;
+
+    if (!tasks) {
+        return;
+    }
+    n = uxTaskGetSystemState(tasks, MAX_TASKS, NULL);
+    for (UBaseType_t i = 0; i < n; i++) {
+        ESP_LOGI(TAG, "stack: %-32s %6" PRIu32 " bytes unused%s", tasks[i].pcTaskName,
+                 (uint32_t)tasks[i].usStackHighWaterMark,
+                 esp_ptr_external_ram(tasks[i].pxStackBase) ? " (PSRAM)" : "");
+    }
+    free(tasks);
+#endif
 }
 
 /* Restart if there has been no successful fetch for CONFIG_TRIMET_STALE_RESTART_MIN.
@@ -148,8 +175,22 @@ static void timer_cb(void *arg)
         save_crash();
     }
 
+    if (!s_logged_first_fetch) {
+        trimet_client_status_t st;
+        trimet_client_get(NULL, &st);
+        if (st.last_ok_uptime_ms != 0) {
+            s_logged_first_fetch = true;
+            log_heap("first arrivals");
+            log_stacks();
+        }
+    }
     if (++ticks % HEAP_LOG_EVERY == 0) {
-        log_heap(uptime_s);
+        char when[24];
+        snprintf(when, sizeof(when), "up %" PRIu32 " min", uptime_s / 60);
+        log_heap(when);
+    }
+    if (ticks % STACK_LOG_EVERY == 0) {
+        log_stacks();
     }
     check_stale(now_ms);
 }
@@ -199,6 +240,8 @@ esp_err_t trimet_health_init(void)
         }
     }
 #endif
+
+    log_heap("boot");
 
     const esp_timer_create_args_t args = {
         .callback = timer_cb,

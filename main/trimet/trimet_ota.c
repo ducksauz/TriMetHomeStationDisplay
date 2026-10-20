@@ -6,12 +6,14 @@
 #include "esp_app_desc.h"
 #include "esp_crt_bundle.h"
 #include "esp_http_client.h"
+#include "esp_heap_caps.h"
 #include "esp_https_ota.h"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
 #include "esp_system.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/idf_additions.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
@@ -60,6 +62,14 @@ void trimet_ota_get(trimet_ota_status_t *out)
 const char *trimet_ota_running_version(void)
 {
     return esp_app_get_description()->version;
+}
+
+/* For sizing: the internal RAM low point (since boot) and this task's unused stack. */
+static void log_memory(const char *what)
+{
+    ESP_LOGI(TAG, "%s: internal min free %u; stack %u of %u bytes unused", what,
+             heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
+             (unsigned)uxTaskGetStackHighWaterMark(NULL), TASK_STACK);
 }
 
 /* ---- check ---- */
@@ -130,8 +140,9 @@ static void check_task(void *arg)
     }
     ESP_LOGI(TAG, "check: running %s, latest %s (%s)", trimet_ota_running_version(),
              body.buf[0] ? body.buf : "?", err == ESP_OK ? "ok" : esp_err_to_name(err));
+    log_memory("check");
     s_busy = false;
-    vTaskDelete(NULL);
+    vTaskDeleteWithCaps(NULL);
 }
 
 /* ---- install ---- */
@@ -208,21 +219,26 @@ static void install_task(void *arg)
     }
 
     ESP_LOGI(TAG, "update installed; restarting");
+    log_memory("install");
     set_state(TRIMET_OTA_RESTARTING, NULL);
     vTaskDelay(pdMS_TO_TICKS(1500));   /* let the screen show it */
     esp_restart();
 
 fail:
     ESP_LOGE(TAG, "%s", msg);
+    log_memory("install");
     set_state(TRIMET_OTA_ERROR, msg);
     trimet_client_pause(false);
     s_busy = false;
-    vTaskDelete(NULL);
+    vTaskDeleteWithCaps(NULL);
 }
 
 /* ---- start ---- */
 
-static void start(TaskFunction_t fn, const char *name, trimet_ota_state_t state)
+/* The check task's stack is in PSRAM to save internal RAM. The install task
+ * writes flash, which disables the cache and with it PSRAM, so its stack
+ * must be internal. */
+static void start(TaskFunction_t fn, const char *name, trimet_ota_state_t state, UBaseType_t stack_caps)
 {
     if (!s_mutex || s_busy) {
         return;
@@ -232,7 +248,7 @@ static void start(TaskFunction_t fn, const char *name, trimet_ota_state_t state)
     s_status.progress = 0;
     xSemaphoreGive(s_mutex);
     set_state(state, NULL);
-    if (xTaskCreate(fn, name, TASK_STACK, NULL, TASK_PRIO, NULL) != pdPASS) {
+    if (xTaskCreateWithCaps(fn, name, TASK_STACK, NULL, TASK_PRIO, NULL, stack_caps) != pdPASS) {
         set_state(TRIMET_OTA_ERROR, "Out of memory");
         s_busy = false;
     }
@@ -240,7 +256,7 @@ static void start(TaskFunction_t fn, const char *name, trimet_ota_state_t state)
 
 void trimet_ota_check(void)
 {
-    start(check_task, "ota-check", TRIMET_OTA_CHECKING);
+    start(check_task, "ota-check", TRIMET_OTA_CHECKING, MALLOC_CAP_SPIRAM);
 }
 
 void trimet_ota_install(void)
@@ -249,7 +265,7 @@ void trimet_ota_install(void)
 
     trimet_ota_get(&st);
     if (st.state == TRIMET_OTA_AVAILABLE) {
-        start(install_task, "ota-install", TRIMET_OTA_DOWNLOADING);
+        start(install_task, "ota-install", TRIMET_OTA_DOWNLOADING, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     }
 }
 
