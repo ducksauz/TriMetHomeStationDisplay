@@ -70,7 +70,7 @@
 - [x] appID entered on the device only (never compiled in); arrivals screen asks for it when missing or rejected
 - [x] Release workflow: tag v* builds and publishes app .bin, version.txt and a full flash image
 - [x] Repo public; v1.1.0 and v1.1.1 released; tested update (v1.1.0-dirty -> v1.1.1), rollback on power cycle during probation (with the "undone" message), and marked good after 5 min
-- [ ] Optional: show service alerts/detours via the TriMet Alerts API
+- [x] ~~Optional: show service alerts/detours via the TriMet Alerts API~~ Won't do. Arrivals responses already carry route-wide detours that would need filtering to our stops; not worth it for now
 
 ## 6. Docs
 - [x] Complete the README with real build/flash steps
