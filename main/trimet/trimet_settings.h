@@ -1,6 +1,7 @@
 /*
  * Settings screen, opened from the cog on the arrivals screen: Wi-Fi (the
- * template's setup screen), night dimming, and uptime/restart diagnostics.
+ * template's setup screen), night dimming, TriMet (appID, poll interval,
+ * page time), and uptime/restart diagnostics.
  */
 #ifndef TRIMET_SETTINGS_H
 #define TRIMET_SETTINGS_H

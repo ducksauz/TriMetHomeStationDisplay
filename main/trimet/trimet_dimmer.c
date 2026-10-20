@@ -1,5 +1,6 @@
 #include "trimet_dimmer.h"
 
+#include <stddef.h>
 #include <time.h>
 
 #include "esp_event.h"
@@ -23,6 +24,7 @@ static const trimet_dim_cfg_t DEFAULT_CFG = {
     .enabled = true,
     .start_min = 22 * 60,   /* 10 PM */
     .end_min = 6 * 60,      /* 6 AM */
+    .brightness = TRIMET_DIM_NIGHT_DEFAULT,
 };
 
 typedef enum { DIM_UNKNOWN, DIM_OFF, DIM_ON } dim_state_t;
@@ -41,8 +43,9 @@ static void set_brightness(int brightness)
 }
 
 /* Decide whether to dim now and change the backlight if needed. Runs on the
- * esp_timer task and, after a settings change, on the LVGL task. */
-static void evaluate(void)
+ * esp_timer task and, after a settings change, on the LVGL task. force sets
+ * the backlight even if the state did not change (new level, end of preview). */
+static void evaluate(bool force)
 {
     time_t now = time(NULL);
     struct tm tm;
@@ -56,11 +59,11 @@ static void evaluate(void)
     xSemaphoreTake(s_mutex, portMAX_DELAY);
     dim = s_cfg.enabled && trimet_time_in_window(tm.tm_hour * 60 + tm.tm_min, s_cfg.start_min, s_cfg.end_min);
 
-    if (dim && s_state != DIM_ON) {
-        ESP_LOGI(TAG, "dimming to %d%%", TRIMET_DIM_NIGHT_BRIGHTNESS);
-        set_brightness(TRIMET_DIM_NIGHT_BRIGHTNESS);
+    if (dim && (s_state != DIM_ON || force)) {
+        ESP_LOGI(TAG, "dimming to %d%%", s_cfg.brightness);
+        set_brightness(s_cfg.brightness);
         s_state = DIM_ON;
-    } else if (!dim && s_state == DIM_ON) {
+    } else if (!dim && (s_state == DIM_ON || force)) {
         ESP_LOGI(TAG, "restoring brightness to %d%%", TRIMET_DIM_DAY_BRIGHTNESS);
         set_brightness(TRIMET_DIM_DAY_BRIGHTNESS);
         s_state = DIM_OFF;
@@ -72,12 +75,13 @@ static void evaluate(void)
 
 static void timer_cb(void *arg)
 {
-    evaluate();
+    evaluate(false);
 }
 
 static bool cfg_valid(const trimet_dim_cfg_t *cfg)
 {
-    return cfg->start_min < 24 * 60 && cfg->end_min < 24 * 60;
+    return cfg->start_min < 24 * 60 && cfg->end_min < 24 * 60 &&
+           cfg->brightness >= TRIMET_DIM_NIGHT_MIN && cfg->brightness <= TRIMET_DIM_NIGHT_MAX;
 }
 
 esp_err_t trimet_dimmer_init(void)
@@ -90,13 +94,20 @@ esp_err_t trimet_dimmer_init(void)
         return ESP_ERR_NO_MEM;
     }
 
-    if (indicator_storage_read(STORAGE_KEY, &cfg, &len) == ESP_OK && len == sizeof(cfg) && cfg_valid(&cfg)) {
+    if (indicator_storage_read(STORAGE_KEY, &cfg, &len) == ESP_OK) {
+        if (len == offsetof(trimet_dim_cfg_t, brightness)) {
+            cfg.brightness = TRIMET_DIM_NIGHT_DEFAULT;   /* saved before brightness was adjustable */
+            len = sizeof(cfg);
+        }
+    }
+    if (len == sizeof(cfg) && cfg_valid(&cfg)) {
         s_cfg = cfg;
     } else {
         s_cfg = DEFAULT_CFG;
     }
-    ESP_LOGI(TAG, "night dimming %s, %02d:%02d-%02d:%02d", s_cfg.enabled ? "on" : "off",
-             s_cfg.start_min / 60, s_cfg.start_min % 60, s_cfg.end_min / 60, s_cfg.end_min % 60);
+    ESP_LOGI(TAG, "night dimming %s, %02d:%02d-%02d:%02d, %d%%", s_cfg.enabled ? "on" : "off",
+             s_cfg.start_min / 60, s_cfg.start_min % 60, s_cfg.end_min / 60, s_cfg.end_min % 60,
+             s_cfg.brightness);
 
     const esp_timer_create_args_t args = {
         .callback = timer_cb,
@@ -132,5 +143,10 @@ void trimet_dimmer_set(const trimet_dim_cfg_t *cfg)
     if (indicator_storage_write(STORAGE_KEY, &copy, sizeof(copy)) != ESP_OK) {
         ESP_LOGW(TAG, "failed to save settings");
     }
-    evaluate();
+    evaluate(true);
+}
+
+void trimet_dimmer_preview(int brightness)
+{
+    set_brightness(brightness);
 }

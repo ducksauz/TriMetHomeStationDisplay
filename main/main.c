@@ -14,6 +14,7 @@
 #include "indicator_model.h"
 #include "indicator_view.h"
 #include "trimet_client.h"
+#include "trimet_config.h"
 #include "trimet_dimmer.h"
 #include "trimet_health.h"
 #include "trimet_view.h"
@@ -69,9 +70,10 @@ void app_main(void)
 
     indicator_model_init();
 
+    trimet_config_init();   /* after the model: needs NVS */
     /* After the model: needs the default event loop created by its Wi-Fi init. */
     if (trimet_client_start() != ESP_OK) {
-        ESP_LOGE(TAG, "TriMet client not started; run 'idf.py menuconfig' > TriMet Station Display");
+        ESP_LOGE(TAG, "TriMet client not started");
     }
     trimet_dimmer_init();
     trimet_health_init();

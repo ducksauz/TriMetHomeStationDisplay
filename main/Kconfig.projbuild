@@ -6,7 +6,8 @@ menu "TriMet Station Display"
         help
             Developer appID from https://developer.trimet.org/appid/registration/.
             This is a secret: it is stored in sdkconfig, which is git-ignored.
-            Do not put it in sdkconfig.defaults.
+            Do not put it in sdkconfig.defaults. Can be left empty and entered
+            on the device instead (Settings > TriMet), which overrides it.
 
     config TRIMET_STREETCAR_STOP_IDS
         string "Streetcar stop IDs (comma-separated)"
@@ -36,19 +37,21 @@ menu "TriMet Station Display"
 
     config TRIMET_POLL_INTERVAL_SEC
         int "Arrivals poll interval (seconds)"
-        range 15 300
+        range 30 120
         default 30
         help
-            How often to request arrivals from TriMet.
+            How often to request arrivals from TriMet, in 30 second steps.
+            Default for Settings > TriMet on the device, which overrides it.
 
     config TRIMET_PAGE_ROTATE_SEC
         int "Page rotation interval (seconds)"
-        range 5 120
+        range 5 30
         default 15
         help
             How long each page is shown before moving to the next.
             Tapping the middle of the screen also switches pages and restarts
-            this timer.
+            this timer. 5 second steps. Default for Settings > TriMet on the
+            device, which overrides it.
 
     config TRIMET_TZ
         string "Time zone (POSIX TZ string)"

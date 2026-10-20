@@ -1,6 +1,6 @@
 /*
  * TriMet Arrivals V2 client: fetches arrivals for the configured streetcar and
- * MAX stops every CONFIG_TRIMET_POLL_INTERVAL_SEC while the network is up, and
+ * MAX stops every poll interval (trimet_config) while the network is up, and
  * keeps the last good result.
  */
 #ifndef TRIMET_CLIENT_H
@@ -23,7 +23,7 @@ typedef enum {
     TRIMET_STATE_HTTP_ERROR,    /* non-200 status (403 = bad appID) */
     TRIMET_STATE_API_ERROR,     /* resultSet.error in response */
     TRIMET_STATE_PARSE_ERROR,   /* malformed JSON */
-    TRIMET_STATE_NO_APP_ID,     /* CONFIG_TRIMET_APP_ID is empty */
+    TRIMET_STATE_NO_APP_ID,     /* no appID in Settings or Kconfig */
 } trimet_state_t;
 
 typedef struct {

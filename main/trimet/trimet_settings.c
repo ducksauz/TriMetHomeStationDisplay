@@ -5,10 +5,12 @@
 #include <time.h>
 
 #include "esp_wifi.h"
+#include "sdkconfig.h"
 
 #include "ui.h"
 #include "ui_helpers.h"
 
+#include "trimet_config.h"
 #include "trimet_dimmer.h"
 #include "trimet_format.h"
 #include "trimet_health.h"
@@ -26,11 +28,13 @@
 #define COLOR_PRESSED 0x262C36
 #define COLOR_TEXT    0xFFFFFF
 #define COLOR_DIM     0x8B949E
+#define COLOR_ACCENT  0x1F6FEB
 
 static lv_obj_t *s_scr;
 static lv_obj_t *s_back_target;
 static lv_obj_t *s_wifi_value;
 static lv_obj_t *s_dim_value;
+static lv_obj_t *s_trimet_value;
 static lv_obj_t *s_health;
 
 /* Night dimming screen */
@@ -38,6 +42,18 @@ static lv_obj_t *s_dim_scr;
 static lv_obj_t *s_dim_switch;
 static lv_obj_t *s_dim_hour[2];    /* [0] start, [1] end */
 static lv_obj_t *s_dim_minute[2];
+static lv_obj_t *s_dim_slider;
+static lv_obj_t *s_dim_level;
+
+/* TriMet screen */
+static lv_obj_t *s_trimet_scr;
+static lv_obj_t *s_appid_value;
+static lv_obj_t *s_poll_choice;
+static lv_obj_t *s_rotate_choice;
+
+/* App ID screen */
+static lv_obj_t *s_appid_scr;
+static lv_obj_t *s_appid_ta;
 
 static lv_obj_t *make_label(lv_obj_t *parent, const lv_font_t *font, uint32_t color, const char *text)
 {
@@ -50,9 +66,9 @@ static lv_obj_t *make_label(lv_obj_t *parent, const lv_font_t *font, uint32_t co
 
 /* A clickable row: icon + title on the left, value + chevron on the right.
  * Returns the value label. */
-static lv_obj_t *make_item(int index, const char *icon, const char *title, lv_event_cb_t cb)
+static lv_obj_t *make_item(lv_obj_t *scr, int index, const char *icon, const char *title, lv_event_cb_t cb)
 {
-    lv_obj_t *item = lv_obj_create(s_scr);
+    lv_obj_t *item = lv_obj_create(scr);
     lv_obj_t *l, *value;
 
     lv_obj_remove_style_all(item);
@@ -176,17 +192,22 @@ static lv_obj_t *make_screen(void)
 
 /* ---- night dimming screen ---- */
 
+static void set_enabled(lv_obj_t *obj, bool enabled)
+{
+    if (enabled) {
+        lv_obj_clear_state(obj, LV_STATE_DISABLED);
+    } else {
+        lv_obj_add_state(obj, LV_STATE_DISABLED);
+    }
+}
+
 static void dim_controls_set_enabled(bool enabled)
 {
     for (int i = 0; i < 2; i++) {
-        if (enabled) {
-            lv_obj_clear_state(s_dim_hour[i], LV_STATE_DISABLED);
-            lv_obj_clear_state(s_dim_minute[i], LV_STATE_DISABLED);
-        } else {
-            lv_obj_add_state(s_dim_hour[i], LV_STATE_DISABLED);
-            lv_obj_add_state(s_dim_minute[i], LV_STATE_DISABLED);
-        }
+        set_enabled(s_dim_hour[i], enabled);
+        set_enabled(s_dim_minute[i], enabled);
     }
+    set_enabled(s_dim_slider, enabled);
 }
 
 /* Save whenever a control changes. */
@@ -197,8 +218,23 @@ static void dim_changed_cb(lv_event_t *e)
     cfg.enabled = lv_obj_has_state(s_dim_switch, LV_STATE_CHECKED);
     cfg.start_min = lv_roller_get_selected(s_dim_hour[0]) * 60 + lv_roller_get_selected(s_dim_minute[0]) * MINUTE_STEP;
     cfg.end_min = lv_roller_get_selected(s_dim_hour[1]) * 60 + lv_roller_get_selected(s_dim_minute[1]) * MINUTE_STEP;
+    cfg.brightness = lv_slider_get_value(s_dim_slider);
     trimet_dimmer_set(&cfg);
     dim_controls_set_enabled(cfg.enabled);
+}
+
+/* While dragging, show the level on the backlight; it is saved (and the
+ * right level restored) on release. */
+static void dim_slider_cb(lv_event_t *e)
+{
+    int v = lv_slider_get_value(s_dim_slider);
+
+    lv_label_set_text_fmt(s_dim_level, "%d%%", v);
+    if (lv_event_get_code(e) == LV_EVENT_VALUE_CHANGED) {
+        trimet_dimmer_preview(v);
+    } else {
+        dim_changed_cb(e);
+    }
 }
 
 static void dim_loaded_cb(lv_event_t *e)
@@ -215,6 +251,8 @@ static void dim_loaded_cb(lv_event_t *e)
     lv_roller_set_selected(s_dim_minute[0], (cfg.start_min % 60) / MINUTE_STEP, LV_ANIM_OFF);
     lv_roller_set_selected(s_dim_hour[1], cfg.end_min / 60, LV_ANIM_OFF);
     lv_roller_set_selected(s_dim_minute[1], (cfg.end_min % 60) / MINUTE_STEP, LV_ANIM_OFF);
+    lv_slider_set_value(s_dim_slider, cfg.brightness, LV_ANIM_OFF);
+    lv_label_set_text_fmt(s_dim_level, "%d%%", cfg.brightness);
     dim_controls_set_enabled(cfg.enabled);
 }
 
@@ -287,14 +325,218 @@ static void build_dim_screen(void)
         s_dim_minute[i] = make_roller("00\n15\n30\n45", min_w, x0 + hour_w + gap, 218);
     }
 
-    l = make_label(s_dim_scr, &lv_font_montserrat_16, COLOR_DIM, "");
-    lv_label_set_text_fmt(l, "The screen dims to %d%% between these times.", TRIMET_DIM_NIGHT_BRIGHTNESS);
-    lv_obj_align(l, LV_ALIGN_BOTTOM_MID, 0, -40);
+    /* Night brightness row */
+    row = lv_obj_create(s_dim_scr);
+    lv_obj_remove_style_all(row);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_size(row, SCREEN_W - 2 * MARGIN, ITEM_H);
+    lv_obj_set_pos(row, MARGIN, 368);
+    lv_obj_set_style_radius(row, 10, 0);
+    lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(row, lv_color_hex(COLOR_ITEM), 0);
+    l = make_label(row, &lv_font_montserrat_22, COLOR_TEXT, "Brightness");
+    lv_obj_align(l, LV_ALIGN_LEFT_MID, 18, 0);
+    s_dim_level = make_label(row, &lv_font_montserrat_20, COLOR_DIM, "");
+    lv_obj_set_width(s_dim_level, 56);
+    lv_obj_set_style_text_align(s_dim_level, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_align(s_dim_level, LV_ALIGN_RIGHT_MID, -18, 0);
+    s_dim_slider = lv_slider_create(row);
+    lv_slider_set_range(s_dim_slider, TRIMET_DIM_NIGHT_MIN, TRIMET_DIM_NIGHT_MAX);
+    lv_obj_set_size(s_dim_slider, 190, 12);
+    lv_obj_align(s_dim_slider, LV_ALIGN_RIGHT_MID, -100, 0);
+    lv_obj_set_ext_click_area(s_dim_slider, 20);
+    lv_obj_set_style_opa(s_dim_slider, LV_OPA_40, LV_STATE_DISABLED);
+    lv_obj_add_event_cb(s_dim_slider, dim_slider_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_add_event_cb(s_dim_slider, dim_slider_cb, LV_EVENT_RELEASED, NULL);
 }
 
 static void dim_cb(lv_event_t *e)
 {
     _ui_screen_change(s_dim_scr, LV_SCR_LOAD_ANIM_MOVE_LEFT, ANIM_MS, 0);
+}
+
+/* ---- App ID screen ---- */
+
+static void appid_close(void)
+{
+    _ui_screen_change(s_trimet_scr, LV_SCR_LOAD_ANIM_MOVE_RIGHT, ANIM_MS, 0);
+}
+
+static void appid_back_cb(lv_event_t *e)
+{
+    appid_close();   /* discard edits */
+}
+
+/* Keyboard: the check key saves, the keyboard key cancels. */
+static void appid_kb_cb(lv_event_t *e)
+{
+    if (lv_event_get_code(e) == LV_EVENT_READY) {
+        trimet_config_set_app_id(lv_textarea_get_text(s_appid_ta));
+    }
+    appid_close();
+}
+
+static void appid_loaded_cb(lv_event_t *e)
+{
+    char app_id[TRIMET_APP_ID_LEN];
+
+    trimet_config_get_app_id(app_id, sizeof(app_id));
+    lv_textarea_set_text(s_appid_ta, app_id);
+}
+
+static void build_appid_screen(void)
+{
+    lv_obj_t *l, *kb;
+
+    s_appid_scr = make_screen();
+    lv_obj_add_event_cb(s_appid_scr, appid_loaded_cb, LV_EVENT_SCREEN_LOAD_START, NULL);
+    make_back_button(s_appid_scr, appid_back_cb);
+
+    l = make_label(s_appid_scr, &lv_font_montserrat_32, COLOR_TEXT, "TriMet App ID");
+    lv_obj_align(l, LV_ALIGN_TOP_MID, 0, 20);
+
+    s_appid_ta = lv_textarea_create(s_appid_scr);
+    lv_textarea_set_one_line(s_appid_ta, true);
+    lv_textarea_set_max_length(s_appid_ta, TRIMET_APP_ID_LEN - 1);
+    /* Letters and digits only: the appID goes into the request URL as is. */
+    lv_textarea_set_accepted_chars(s_appid_ta,
+        "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
+    lv_textarea_set_placeholder_text(s_appid_ta, "Not set");
+    lv_obj_set_style_text_font(s_appid_ta, &lv_font_montserrat_22, 0);
+    lv_obj_set_width(s_appid_ta, SCREEN_W - 2 * MARGIN);
+    lv_obj_set_pos(s_appid_ta, MARGIN, 88);
+    lv_obj_add_state(s_appid_ta, LV_STATE_FOCUSED);   /* show the cursor */
+
+    l = make_label(s_appid_scr, &lv_font_montserrat_16, COLOR_DIM,
+                   strlen(CONFIG_TRIMET_APP_ID) ? "From developer.trimet.org. Clear it to use the built-in ID."
+                                                : "From developer.trimet.org.");
+    lv_obj_set_width(l, SCREEN_W - 2 * MARGIN);
+    lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_pos(l, MARGIN, 150);
+
+    kb = lv_keyboard_create(s_appid_scr);
+    lv_keyboard_set_textarea(kb, s_appid_ta);
+    lv_obj_set_size(kb, SCREEN_W, 270);
+    lv_obj_align(kb, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_style_text_font(kb, &lv_font_montserrat_20, LV_PART_ITEMS);
+    lv_obj_add_event_cb(kb, appid_kb_cb, LV_EVENT_READY, NULL);
+    lv_obj_add_event_cb(kb, appid_kb_cb, LV_EVENT_CANCEL, NULL);
+}
+
+/* ---- TriMet screen ---- */
+
+static const char *POLL_MAP[] = {"30 s", "60 s", "90 s", "120 s", ""};
+static const char *ROTATE_MAP[] = {"5 s", "10 s", "15 s", "20 s", "25 s", "30 s", ""};
+
+static void update_appid_value(lv_obj_t *label)
+{
+    char app_id[TRIMET_APP_ID_LEN];
+    size_t n;
+
+    trimet_config_get_app_id(app_id, sizeof(app_id));
+    n = strlen(app_id);
+    if (n == 0) {
+        lv_label_set_text(label, "Not set");
+    } else {
+        /* Only the end, so the full secret is never on screen here. */
+        lv_label_set_text_fmt(label, "Ends in %s", app_id + (n > 4 ? n - 4 : 0));
+    }
+}
+
+/* A row of mutually exclusive buttons, one per option in map. */
+static lv_obj_t *make_choice(const char **map, int y, lv_event_cb_t cb)
+{
+    lv_obj_t *m = lv_btnmatrix_create(s_trimet_scr);
+
+    lv_btnmatrix_set_map(m, map);
+    lv_btnmatrix_set_btn_ctrl_all(m, LV_BTNMATRIX_CTRL_CHECKABLE);
+    lv_btnmatrix_set_one_checked(m, true);
+    lv_obj_set_size(m, SCREEN_W - 2 * MARGIN, 60);
+    lv_obj_set_pos(m, MARGIN, y);
+    lv_obj_set_style_bg_opa(m, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(m, 0, 0);
+    lv_obj_set_style_pad_all(m, 0, 0);
+    lv_obj_set_style_pad_column(m, 8, 0);
+    lv_obj_set_style_radius(m, 10, LV_PART_ITEMS);
+    lv_obj_set_style_shadow_width(m, 0, LV_PART_ITEMS);
+    lv_obj_set_style_text_font(m, &lv_font_montserrat_20, LV_PART_ITEMS);
+    lv_obj_set_style_text_color(m, lv_color_hex(COLOR_TEXT), LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(m, lv_color_hex(COLOR_ITEM), LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(m, lv_color_hex(COLOR_PRESSED), LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(m, lv_color_hex(COLOR_ACCENT), LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_add_event_cb(m, cb, LV_EVENT_VALUE_CHANGED, NULL);
+    return m;
+}
+
+static void select_choice(lv_obj_t *m, int index)
+{
+    lv_btnmatrix_set_btn_ctrl(m, index, LV_BTNMATRIX_CTRL_CHECKED);   /* one_checked clears the rest */
+}
+
+static void poll_cb(lv_event_t *e)
+{
+    uint16_t i = lv_btnmatrix_get_selected_btn(s_poll_choice);
+
+    if (i != LV_BTNMATRIX_BTN_NONE) {
+        trimet_config_set_poll_sec(TRIMET_POLL_MIN_SEC + i * TRIMET_POLL_STEP_SEC);
+    }
+    select_choice(s_poll_choice, (trimet_config_get_poll_sec() - TRIMET_POLL_MIN_SEC) / TRIMET_POLL_STEP_SEC);
+}
+
+static void rotate_cb(lv_event_t *e)
+{
+    uint16_t i = lv_btnmatrix_get_selected_btn(s_rotate_choice);
+
+    if (i != LV_BTNMATRIX_BTN_NONE) {
+        trimet_config_set_rotate_sec(TRIMET_ROTATE_MIN_SEC + i * TRIMET_ROTATE_STEP_SEC);
+    }
+    select_choice(s_rotate_choice, (trimet_config_get_rotate_sec() - TRIMET_ROTATE_MIN_SEC) / TRIMET_ROTATE_STEP_SEC);
+}
+
+static void trimet_loaded_cb(lv_event_t *e)
+{
+    update_appid_value(s_appid_value);
+    select_choice(s_poll_choice, (trimet_config_get_poll_sec() - TRIMET_POLL_MIN_SEC) / TRIMET_POLL_STEP_SEC);
+    select_choice(s_rotate_choice, (trimet_config_get_rotate_sec() - TRIMET_ROTATE_MIN_SEC) / TRIMET_ROTATE_STEP_SEC);
+}
+
+static void trimet_back_cb(lv_event_t *e)
+{
+    _ui_screen_change(s_scr, LV_SCR_LOAD_ANIM_MOVE_RIGHT, ANIM_MS, 0);
+}
+
+static void appid_cb(lv_event_t *e)
+{
+    _ui_screen_change(s_appid_scr, LV_SCR_LOAD_ANIM_MOVE_LEFT, ANIM_MS, 0);
+}
+
+static void build_trimet_screen(void)
+{
+    lv_obj_t *l;
+
+    s_trimet_scr = make_screen();
+    lv_obj_add_event_cb(s_trimet_scr, trimet_loaded_cb, LV_EVENT_SCREEN_LOAD_START, NULL);
+    make_back_button(s_trimet_scr, trimet_back_cb);
+
+    l = make_label(s_trimet_scr, &lv_font_montserrat_32, COLOR_TEXT, "TriMet");
+    lv_obj_align(l, LV_ALIGN_TOP_MID, 0, 20);
+
+    s_appid_value = make_item(s_trimet_scr, 0, LV_SYMBOL_EDIT, "App ID", appid_cb);
+
+    l = make_label(s_trimet_scr, &lv_font_montserrat_20, COLOR_DIM, "Check for arrivals every");
+    lv_obj_set_pos(l, MARGIN + 4, 190);
+    s_poll_choice = make_choice(POLL_MAP, 220, poll_cb);
+
+    l = make_label(s_trimet_scr, &lv_font_montserrat_20, COLOR_DIM, "Show each page for");
+    lv_obj_set_pos(l, MARGIN + 4, 310);
+    s_rotate_choice = make_choice(ROTATE_MAP, 340, rotate_cb);
+
+    build_appid_screen();
+}
+
+static void trimet_cb(lv_event_t *e)
+{
+    _ui_screen_change(s_trimet_scr, LV_SCR_LOAD_ANIM_MOVE_LEFT, ANIM_MS, 0);
 }
 
 /* ---- settings screen ---- */
@@ -315,6 +557,7 @@ static void screen_loaded_cb(lv_event_t *e)
 {
     update_wifi_value();
     update_dim_value();
+    update_appid_value(s_trimet_value);
     update_health();
 }
 
@@ -331,8 +574,9 @@ void trimet_settings_init(lv_obj_t *back_target)
     l = make_label(s_scr, &lv_font_montserrat_32, COLOR_TEXT, "Settings");
     lv_obj_align(l, LV_ALIGN_TOP_MID, 0, 20);
 
-    s_wifi_value = make_item(0, LV_SYMBOL_WIFI, "Wi-Fi", wifi_cb);
-    s_dim_value = make_item(1, LV_SYMBOL_EYE_CLOSE, "Night dimming", dim_cb);
+    s_wifi_value = make_item(s_scr, 0, LV_SYMBOL_WIFI, "Wi-Fi", wifi_cb);
+    s_dim_value = make_item(s_scr, 1, LV_SYMBOL_EYE_CLOSE, "Night dimming", dim_cb);
+    s_trimet_value = make_item(s_scr, 2, LV_SYMBOL_GPS, "TriMet", trimet_cb);
 
     s_health = make_label(s_scr, &lv_font_montserrat_16, COLOR_DIM, "");
     lv_obj_set_width(s_health, SCREEN_W - 2 * MARGIN);
@@ -340,6 +584,7 @@ void trimet_settings_init(lv_obj_t *back_target)
     lv_obj_align(s_health, LV_ALIGN_BOTTOM_MID, 0, -24);
 
     build_dim_screen();
+    build_trimet_screen();
 }
 
 void trimet_settings_open(void)

@@ -11,6 +11,7 @@
 #include "sdkconfig.h"
 
 #include "trimet_client.h"
+#include "trimet_config.h"
 #include "trimet_format.h"
 #include "trimet_settings.h"
 #include "ui.h"
@@ -239,7 +240,7 @@ static void render_status(bool have_data, const trimet_client_status_t *st)
     bool failing = st->state != TRIMET_STATE_OK && st->state != TRIMET_STATE_IDLE;
 
     if (st->state == TRIMET_STATE_NO_APP_ID) {
-        snprintf(buf, sizeof(buf), "TriMet appID not set");
+        snprintf(buf, sizeof(buf), "TriMet appID not set: Settings > TriMet");
         color = COLOR_ERROR;
     } else if (!have_data) {
         if (failing) {
@@ -255,7 +256,7 @@ static void render_status(bool have_data, const trimet_client_status_t *st)
             snprintf(buf, sizeof(buf), "Updated %d min ago%s", (int)(age_s / 60), failing ? " - retrying" : "");
         }
         /* Stale: more than two missed polls. */
-        if (age_s > 2 * CONFIG_TRIMET_POLL_INTERVAL_SEC + 10) {
+        if (age_s > 2 * trimet_config_get_poll_sec() + 10) {
             color = COLOR_WARN;
         }
     }
@@ -304,6 +305,12 @@ static int next_page(void)
 
 static void refresh_timer_cb(lv_timer_t *t)
 {
+    /* Pick up a page time change from Settings > TriMet. */
+    uint32_t rotate_ms = trimet_config_get_rotate_sec() * 1000;
+    if (s_rotate_timer->period != rotate_ms) {
+        lv_timer_set_period(s_rotate_timer, rotate_ms);
+    }
+
     if (lv_scr_act() == s_scr) {
         render();
     }
@@ -494,7 +501,7 @@ void trimet_view_init(void)
     }
 
     lv_timer_create(refresh_timer_cb, REFRESH_MS, NULL);
-    s_rotate_timer = lv_timer_create(rotate_timer_cb, CONFIG_TRIMET_PAGE_ROTATE_SEC * 1000, NULL);
+    s_rotate_timer = lv_timer_create(rotate_timer_cb, trimet_config_get_rotate_sec() * 1000, NULL);
 
     trimet_settings_init(s_scr);
     /* Also the fallback for the Wi-Fi screen's back button (e.g. first-boot setup). */
@@ -502,7 +509,7 @@ void trimet_view_init(void)
 
     render();
     lv_disp_load_scr(s_scr);
-    ESP_LOGI(TAG, "%d pages, rotate every %d s", s_page_count, CONFIG_TRIMET_PAGE_ROTATE_SEC);
+    ESP_LOGI(TAG, "%d pages", s_page_count);
 }
 
 lv_obj_t *trimet_view_screen(void)

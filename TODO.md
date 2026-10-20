@@ -50,6 +50,8 @@
 ## 5. Polish
 - [x] Night dimming (default 10 PM - 6 AM, 10%), configurable under Settings → Night dimming
 - [x] Verify Night Dimming settings screen on device
+- [x] Adjustable night brightness (1-50%, previews on the backlight while dragging)
+- [x] Settings > TriMet: appID entry (on-screen keyboard), poll interval (30-120 s), page display time (5-30 s); saved in NVS, Kconfig values are defaults
 - [ ] Optional: tap to temporarily brighten while dimmed
 - [x] Touch to switch pages (center tap)
 - [x] Wi-Fi setup without reflashing (template touchscreen screen, via Settings)

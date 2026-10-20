@@ -17,6 +17,8 @@
 #include "freertos/task.h"
 #include "sdkconfig.h"
 
+#include "trimet_config.h"
+
 #define TRIMET_URL_BASE      "https://developer.trimet.org/ws/v2/arrivals"
 #define TRIMET_LOOKAHEAD_MIN 60        /* "minutes" param; API max is 60 */
 #define HTTP_TIMEOUT_MS      10000
@@ -103,7 +105,8 @@ static char *read_body(esp_http_client_handle_t client, int *out_len)
     return buf;
 }
 
-static trimet_state_t fetch_once(trimet_arrivals_t *out, int *http_status, char *err, size_t err_len)
+static trimet_state_t fetch_once(const char *app_id, trimet_arrivals_t *out, int *http_status,
+                                 char *err, size_t err_len)
 {
     char url[256];
     esp_http_client_handle_t client;
@@ -118,7 +121,7 @@ static trimet_state_t fetch_once(trimet_arrivals_t *out, int *http_status, char 
     /* Never log this URL: it contains the appID. */
     snprintf(url, sizeof(url), TRIMET_URL_BASE "?locIDs=%s,%s&appID=%s&minutes=%d",
              CONFIG_TRIMET_STREETCAR_STOP_IDS, CONFIG_TRIMET_MAX_STOP_IDS,
-             CONFIG_TRIMET_APP_ID, TRIMET_LOOKAHEAD_MIN);
+             app_id, TRIMET_LOOKAHEAD_MIN);
 
     esp_http_client_config_t cfg = {
         .url = url,
@@ -193,13 +196,14 @@ static void log_arrivals(const trimet_arrivals_t *a)
 static void poll_task(void *arg)
 {
     uint32_t retry_ms = RETRY_MIN_MS;
-    const uint32_t poll_ms = CONFIG_TRIMET_POLL_INTERVAL_SEC * 1000;
     TickType_t wait = portMAX_DELAY;   /* until the station gets an IP */
 
     for (;;) {
         trimet_state_t state;
         int http_status;
         char err[TRIMET_ERROR_LEN];
+        char app_id[TRIMET_APP_ID_LEN];
+        uint32_t poll_ms;
 
         ulTaskNotifyTake(pdTRUE, wait);
         if (!s_have_ip) {
@@ -207,7 +211,20 @@ static void poll_task(void *arg)
             continue;
         }
 
-        state = fetch_once(s_work, &http_status, err, sizeof(err));
+        /* Read each time: both can be changed in Settings > TriMet. */
+        poll_ms = trimet_config_get_poll_sec() * 1000;
+        trimet_config_get_app_id(app_id, sizeof(app_id));
+        if (app_id[0] == '\0') {
+            xSemaphoreTake(s_mutex, portMAX_DELAY);
+            s_status.state = TRIMET_STATE_NO_APP_ID;
+            s_status.http_status = 0;
+            strlcpy(s_status.error, "appID not set (Settings > TriMet)", sizeof(s_status.error));
+            xSemaphoreGive(s_mutex);
+            wait = portMAX_DELAY;   /* until trimet_config_set_app_id() calls refresh */
+            continue;
+        }
+
+        state = fetch_once(app_id, s_work, &http_status, err, sizeof(err));
 
         xSemaphoreTake(s_mutex, portMAX_DELAY);
         s_status.state = state;
@@ -228,7 +245,7 @@ static void poll_task(void *arg)
             ESP_LOGW(TAG, "fetch failed (%s): %s; retry in %" PRIu32 " s",
                      state_name(state), err, retry_ms / 1000);
             if (state == TRIMET_STATE_HTTP_ERROR && http_status == 403) {
-                ESP_LOGE(TAG, "appID rejected; check CONFIG_TRIMET_APP_ID");
+                ESP_LOGE(TAG, "appID rejected; check Settings > TriMet");
             }
             wait = pdMS_TO_TICKS(retry_ms);
             retry_ms = (retry_ms * 2 < poll_ms) ? retry_ms * 2 : poll_ms;
@@ -270,13 +287,6 @@ esp_err_t trimet_client_start(void)
         return ESP_ERR_NO_MEM;
     }
 
-    if (strlen(CONFIG_TRIMET_APP_ID) == 0) {
-        s_status.state = TRIMET_STATE_NO_APP_ID;
-        strlcpy(s_status.error, "appID not set (idf.py menuconfig)", sizeof(s_status.error));
-        ESP_LOGE(TAG, "CONFIG_TRIMET_APP_ID is empty; arrivals disabled");
-        return ESP_ERR_INVALID_STATE;
-    }
-
     if (xTaskCreate(poll_task, "trimet", TASK_STACK, NULL, TASK_PRIO, &s_task) != pdPASS) {
         return ESP_ERR_NO_MEM;
     }
@@ -295,7 +305,7 @@ esp_err_t trimet_client_start(void)
         trimet_client_refresh();
     }
     ESP_LOGI(TAG, "started: streetcar stops %s, MAX stops %s, every %d s",
-             CONFIG_TRIMET_STREETCAR_STOP_IDS, CONFIG_TRIMET_MAX_STOP_IDS, CONFIG_TRIMET_POLL_INTERVAL_SEC);
+             CONFIG_TRIMET_STREETCAR_STOP_IDS, CONFIG_TRIMET_MAX_STOP_IDS, trimet_config_get_poll_sec());
     return ESP_OK;
 }
 
