@@ -15,6 +15,7 @@
 #include "indicator_view.h"
 #include "trimet_client.h"
 #include "trimet_dimmer.h"
+#include "trimet_health.h"
 #include "trimet_view.h"
 //#include "indicator_controller.h"
 
@@ -73,6 +74,7 @@ void app_main(void)
         ESP_LOGE(TAG, "TriMet client not started; run 'idf.py menuconfig' > TriMet Station Display");
     }
     trimet_dimmer_init();
+    trimet_health_init();
 
     indicator_controller_init();
 

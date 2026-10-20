@@ -53,7 +53,12 @@
 - [ ] Optional: tap to temporarily brighten while dimmed
 - [x] Touch to switch pages (center tap)
 - [x] Wi-Fi setup without reflashing (template touchscreen screen, via Settings)
-- [ ] Watchdog and recovery; OTA updates (optional)
+- [x] Watchdog and recovery: reboot on crash (was halt), task watchdog panics and watches the LVGL task, core dump to flash, restart after 30 min without arrivals
+- [x] Restart diagnostics on the Settings screen (uptime, unexpected restart count, last reason)
+- [x] Verify watchdog build on device (15 min serial capture, no warnings)
+- [x] Fix the overnight reboot/blank screen: hardware SHA/AES DMA and the LCD driver flushed the PSRAM cache from both cores at once and deadlocked (interrupt watchdog); TLS now uses software SHA/AES
+- [ ] Confirm no unexpected restarts over a day or two (Settings shows the count; it was 3 from testing)
+- [ ] Optional: OTA updates
 - [ ] Optional: show service alerts/detours via the TriMet Alerts API
 
 ## 6. Docs

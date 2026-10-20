@@ -60,4 +60,15 @@ menu "TriMet Station Display"
             does not follow DST changes. Leave empty to use the template's
             lookup.
 
+    config TRIMET_STALE_RESTART_MIN
+        int "Restart after this many minutes without arrivals (0 = never)"
+        range 0 1440
+        default 30
+        help
+            Restart the device if no arrivals have been fetched successfully
+            for this long, to recover from Wi-Fi or network problems that do
+            not clear on their own. During a long internet outage the device
+            restarts once per interval. Crashes and hangs are handled
+            separately by the ESP-IDF panic handler and task watchdog.
+
 endmenu

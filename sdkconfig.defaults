@@ -29,7 +29,6 @@ CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 
 CONFIG_ESP32S3_DATA_CACHE_64KB=y
 CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
-CONFIG_ESP_SYSTEM_PANIC_PRINT_HALT=y
 CONFIG_ESP_IPC_TASK_STACK_SIZE=4096
 CONFIG_ESP32_WIFI_STATIC_RX_BUFFER_NUM=10
 CONFIG_ESP32_WIFI_RX_BA_WIN=6
@@ -89,3 +88,23 @@ CONFIG_LV_FONT_MONTSERRAT_48=y
 # TLS buffers in PSRAM: internal RAM is shared with LVGL objects and ran out
 # during concurrent HTTPS requests (mbedtls_ssl_setup -0x7F00).
 CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
+# Software SHA/AES: the hardware drivers' DMA path calls Cache_WriteBack_Addr
+# on these PSRAM buffers without the cache lock (ESP-IDF 5.1), racing the LCD
+# driver's writeback on the other core and deadlocking both (interrupt
+# watchdog resets during TriMet fetches).
+CONFIG_MBEDTLS_HARDWARE_AES=n
+CONFIG_MBEDTLS_HARDWARE_SHA=n
+
+# Recover instead of hanging: reboot on a crash (the template halted, leaving
+# a blank screen) and treat a task watchdog timeout as a crash. The LVGL task
+# is also watched (lv_port.c).
+CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT=y
+CONFIG_ESP_TASK_WDT_PANIC=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
+# Panic handler in IRAM, so it can still print a backtrace when the cache is
+# stuck (from flash, interrupt watchdog resets printed nothing).
+CONFIG_ESP_PANIC_HANDLER_IRAM=y
+# Save a core dump to the coredump partition on a crash; read it later over
+# USB with 'idf.py coredump-info'.
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y

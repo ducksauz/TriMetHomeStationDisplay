@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "esp_wifi.h"
 
@@ -10,6 +11,7 @@
 
 #include "trimet_dimmer.h"
 #include "trimet_format.h"
+#include "trimet_health.h"
 
 #define SCREEN_W      480
 #define MARGIN        16
@@ -29,6 +31,7 @@ static lv_obj_t *s_scr;
 static lv_obj_t *s_back_target;
 static lv_obj_t *s_wifi_value;
 static lv_obj_t *s_dim_value;
+static lv_obj_t *s_health;
 
 /* Night dimming screen */
 static lv_obj_t *s_dim_scr;
@@ -105,6 +108,43 @@ static void update_dim_value(void)
     trimet_format_time_of_day(cfg.start_min, start, sizeof(start));
     trimet_format_time_of_day(cfg.end_min, end, sizeof(end));
     lv_label_set_text_fmt(s_dim_value, "%s - %s", start, end);
+}
+
+static void format_duration(uint32_t s, char *buf, size_t len)
+{
+    if (s >= 86400) {
+        snprintf(buf, len, "%ud %uh", (unsigned)(s / 86400), (unsigned)(s % 86400 / 3600));
+    } else if (s >= 3600) {
+        snprintf(buf, len, "%uh %um", (unsigned)(s / 3600), (unsigned)(s % 3600 / 60));
+    } else {
+        snprintf(buf, len, "%um", (unsigned)(s / 60));
+    }
+}
+
+/* Uptime and the most recent unexpected restart, so restarts can be noticed
+ * without a serial console. */
+static void update_health(void)
+{
+    trimet_health_t h;
+    char up[16], ran[16], when[32] = "";
+
+    trimet_health_get(&h);
+    format_duration(h.uptime_s, up, sizeof(up));
+    if (h.crash_count == 0) {
+        lv_label_set_text_fmt(s_health, "Up %s\nNo unexpected restarts", up);
+        return;
+    }
+    if (h.crash_time) {
+        struct tm tm;
+        localtime_r(&h.crash_time, &tm);
+        strftime(when, sizeof(when), " on %b %d, %I:%M %p", &tm);
+    }
+    format_duration(h.crash_uptime_s, ran, sizeof(ran));
+    lv_label_set_text_fmt(s_health, "Up %s\nUnexpected restarts: %u\nLast: %s%s%s%s%s",
+                          up, (unsigned)h.crash_count,
+                          trimet_health_reason_name(h.crash_reason, h.crash_stale), when,
+                          h.crash_uptime_s ? " after " : "", h.crash_uptime_s ? ran : "",
+                          h.coredump ? "\nCore dump saved" : "");
 }
 
 /* Top-left back button on a screen. */
@@ -275,6 +315,7 @@ static void screen_loaded_cb(lv_event_t *e)
 {
     update_wifi_value();
     update_dim_value();
+    update_health();
 }
 
 void trimet_settings_init(lv_obj_t *back_target)
@@ -292,6 +333,11 @@ void trimet_settings_init(lv_obj_t *back_target)
 
     s_wifi_value = make_item(0, LV_SYMBOL_WIFI, "Wi-Fi", wifi_cb);
     s_dim_value = make_item(1, LV_SYMBOL_EYE_CLOSE, "Night dimming", dim_cb);
+
+    s_health = make_label(s_scr, &lv_font_montserrat_16, COLOR_DIM, "");
+    lv_obj_set_width(s_health, SCREEN_W - 2 * MARGIN);
+    lv_obj_set_style_text_align(s_health, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(s_health, LV_ALIGN_BOTTOM_MID, 0, -24);
 
     build_dim_screen();
 }

@@ -1,6 +1,6 @@
 /*
- * Settings screen, opened from the cog on the arrivals screen. Currently has
- * a Wi-Fi entry that opens the template's Wi-Fi setup screen.
+ * Settings screen, opened from the cog on the arrivals screen: Wi-Fi (the
+ * template's setup screen), night dimming, and uptime/restart diagnostics.
  */
 #ifndef TRIMET_SETTINGS_H
 #define TRIMET_SETTINGS_H

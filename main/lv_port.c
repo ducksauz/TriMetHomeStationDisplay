@@ -1,6 +1,8 @@
+#include "esp_cache.h"
 #include "esp_heap_caps.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_task_wdt.h"
 #include "esp_timer.h"
 #include "rom/cache.h"
 #include "freertos/FreeRTOS.h"
@@ -344,7 +346,9 @@ static void lv_port_direct_mode_copy(void)
             bytes_to_flush = (y_end - y_start) * bytes_per_line;
             flush_ptr = fb_to + y_start * bytes_per_line;
 
-            Cache_WriteBack_Addr((uint32_t)(flush_ptr), bytes_to_flush);
+            /* Through esp_cache_msync, not Cache_WriteBack_Addr: it takes the
+             * lock that keeps concurrent writebacks on two cores from deadlocking. */
+            esp_cache_msync(flush_ptr, bytes_to_flush, ESP_CACHE_MSYNC_FLAG_UNALIGNED);
         }
     }
 }
@@ -357,7 +361,11 @@ static void lv_port_direct_mode_copy(void)
  */
 static void lvgl_task(void *args)
 {
+    /* A stuck UI (lock never released, flush never finishing) triggers the
+     * task watchdog, which reboots the device. */
+    ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
     for (;;) {
+        esp_task_wdt_reset();
         xSemaphoreTake(lvgl_mutex, portMAX_DELAY);
         lv_task_handler();
         xSemaphoreGive(lvgl_mutex);
