@@ -20,7 +20,6 @@
 #include "trimet_health.h"
 #include "trimet_ota.h"
 #include "trimet_view.h"
-//#include "indicator_controller.h"
 
 static const char *TAG = "app_main";
 
@@ -78,8 +77,6 @@ void app_main(void)
     trimet_dimmer_init();
     trimet_health_init();
     trimet_ota_init();
-
-    indicator_controller_init();
 
     static char buffer[128];    /* Make sure buffer is enough for `sprintf` */
     while (1) {

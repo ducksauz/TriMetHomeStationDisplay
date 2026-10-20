@@ -208,16 +208,16 @@ Update checks need the repository to be public (or `CONFIG_TRIMET_OTA_URL` to po
 - After 30 min without arrivals (not counting a missing or rejected appID), the device restarts.
 - TLS uses software SHA/AES: in ESP-IDF 5.1 the hardware drivers flush the PSRAM cache without the lock the LCD driver uses, and the two cores deadlocked.
 - PSRAM and flash run at 80 MHz, not the template's 120 MHz. Octal PSRAM at 120 MHz is experimental and drifts out of timing as the chip warms up; a core dump showed a single-bit error reading a code constant from PSRAM. To leave enough PSRAM bandwidth for the screen, which streams its frame buffer from PSRAM, the LCD pixel clock is 14 MHz instead of 18.
-- Internal RAM is kept for what must be there (DMA buffers, task stacks that write flash). LVGL allocates from PSRAM, the TriMet poll and update-check tasks have PSRAM stacks, and the Wi-Fi driver runs from PSRAM rather than internal RAM. About 50 KB of internal RAM stays free, and at least 27 KB during an update check. The log reports free memory every 10 minutes and each task's unused stack every hour.
+- Internal RAM is kept for what must be there (DMA buffers, task stacks that write flash). LVGL allocates from PSRAM, the TriMet poll and update-check tasks have PSRAM stacks, and the Wi-Fi driver runs from PSRAM rather than internal RAM. About 100 KB of internal RAM stays free. The log reports free memory every 10 minutes and each task's unused stack every hour.
 - Each release includes `trimet_station_display.elf`. To decode a core dump from a release build, run `idf.py coredump-info` with that ELF (`esp-coredump info_corefile --core-format raw --core <dump> <elf>`); a local rebuild won't match because of build timestamps.
 
 ### Changes from the upstream template
 - Board set to D1/D1S (upstream defaults to D1L/LoRa)
 - Project renamed to `trimet_station_display`
 - Added the missing `#include "esp_timer.h"` in `main/model/indicator_time.c` and `indicator_btn.c`, which are required on IDF 5.1.7
-- Added `ui_set_screen_last()` to `main/ui/ui.c`, so the Wi-Fi screen's back button can return to our screens
+- Removed the template's clock, sensor, sensor chart, settings, display and date/time screens, their controller, the RP2040 sensor model, the IP-based city/time zone lookup, and their fonts and images. `main/ui/ui.c` keeps only the Wi-Fi and factory reset screens, plus `ui_set_screen_last()` so the Wi-Fi screen's back button returns to our screens. This cut the image from 2.4 MB to 1.6 MB and freed about 50 KB of internal RAM.
 - `main.c` loads the arrivals screen at startup instead of the template's time screen
-- `indicator_time.c`: `__time_zone_set()` uses `CONFIG_TRIMET_TZ` when set. The template's IP lookup sets a fixed UTC offset that doesn't follow DST, and it geolocates this device to Seattle.
+- `indicator_time.c`: `__time_zone_set()` uses `CONFIG_TRIMET_TZ` when set, instead of the template's fixed UTC offset, which doesn't follow DST.
 - `sdkconfig.defaults`: `CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y` puts TLS buffers in PSRAM. Internal RAM is shared with LVGL and ran out during concurrent HTTPS requests.
 - `sdkconfig.defaults`: reboot on panic, task watchdog panics, core dump to flash, app rollback, software SHA/AES (see Reliability).
 - `sdkconfig.defaults`: Wi-Fi IRAM optimizations, SoftAP, Enterprise and OWE off; IPC task stacks 2 KB instead of 4 KB (see Reliability).
