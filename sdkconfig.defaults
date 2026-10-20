@@ -5,11 +5,13 @@
 CONFIG_IDF_TARGET="esp32s3"
 CONFIG_LCD_BOARD_SENSECAP_INDICATOR_D1=y
 
-CONFIG_IDF_EXPERIMENTAL_FEATURES=y
-
 CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
 CONFIG_SPIRAM=y
-CONFIG_SPIRAM_SPEED_120M=y
+# 80 MHz, not the template's 120 MHz: octal PSRAM at 120 MHz is experimental
+# and drifts out of timing as the chip warms up. A core dump showed a
+# single-bit error reading a code constant from PSRAM (code and rodata run
+# from PSRAM, see below), 34 min after boot.
+CONFIG_SPIRAM_SPEED_80M=y
 CONFIG_SPIRAM_MODE_OCT=y
 CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
 CONFIG_SPIRAM_RODATA=y
@@ -35,7 +37,7 @@ CONFIG_ESP32_WIFI_RX_BA_WIN=6
 # CONFIG_ESP_WIFI_STA_DISCONNECTED_PM_ENABLE is not set
 
 CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
-CONFIG_ESPTOOLPY_FLASHFREQ_120M=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
 CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
 
 CONFIG_PARTITION_TABLE_CUSTOM=y
@@ -51,6 +53,10 @@ CONFIG_FREERTOS_HZ=1000
 CONFIG_LCD_AVOID_TEAR=y
 CONFIG_LCD_LVGL_DIRECT_MODE=y
 CONFIG_LCD_TASK_REFRESH_TIME=10
+# 14 MHz pixel clock (template: 18): the panel streams its frame buffer from
+# PSRAM, and at 80 MHz PSRAM there is not enough spare bandwidth for 18 MHz
+# while the CPU is drawing (glitches on page changes).
+CONFIG_LCD_EVB_SCREEN_FREQ=14
 
 
 # CONFIG_LV_CONF_MINIMAL=y

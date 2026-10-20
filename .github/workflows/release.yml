@@ -8,6 +8,9 @@
 #   version.txt                      the tag, checked by devices for a newer version
 #   trimet_station_display_full.bin  bootloader + partition table + app, for a
 #                                    first install over USB at offset 0x0
+#   trimet_station_display.elf       symbols for decoding a core dump from this
+#                                    release (idf.py coredump-info needs the
+#                                    exact ELF; a rebuild differs in timestamps)
 #
 # The build uses only sdkconfig.defaults, so it contains no TriMet appID:
 # that is entered on the device and kept in NVS.
@@ -46,5 +49,6 @@ jobs:
           files: |
             build/trimet_station_display.bin
             build/trimet_station_display_full.bin
+            build/trimet_station_display.elf
             version.txt
           generate_release_notes: true

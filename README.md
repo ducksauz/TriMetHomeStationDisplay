@@ -195,7 +195,7 @@ Pushing a version tag builds and publishes a GitHub release (`.github/workflows/
 git tag v1.1.0 && git push origin v1.1.0
 ```
 
-The release has `trimet_station_display.bin` (the app, for updates), `version.txt` (the tag) and `trimet_station_display_full.bin` (bootloader, partition table and app, for a first install at offset `0x0`). Releases are built from `sdkconfig.defaults` only, so they contain no appID.
+The release has `trimet_station_display.bin` (the app, for updates), `version.txt` (the tag), `trimet_station_display_full.bin` (bootloader, partition table and app, for a first install at offset `0x0`) and `trimet_station_display.elf` (for decoding core dumps). Releases are built from `sdkconfig.defaults` only, so they contain no appID.
 
 On the device, **Settings → Firmware → Check for update** compares `version.txt` from the latest release with the running version, and **Install** downloads the new image into the other OTA slot (`partitions.csv` has two 3.5 MB slots) and restarts. The new image is on probation until it has run for 5 minutes and fetched arrivals. If it restarts before then, whether from a crash, a watchdog or the no-data restart, the bootloader goes back to the previous image, and Settings → Firmware says the update was undone. Arrivals polling pauses during a check or download.
 
@@ -207,6 +207,8 @@ Update checks need the repository to be public (or `CONFIG_TRIMET_OTA_URL` to po
 - The task watchdog also watches the LVGL task, so a frozen screen reboots.
 - After 30 min without arrivals (not counting a missing or rejected appID), the device restarts.
 - TLS uses software SHA/AES: in ESP-IDF 5.1 the hardware drivers flush the PSRAM cache without the lock the LCD driver uses, and the two cores deadlocked.
+- PSRAM and flash run at 80 MHz, not the template's 120 MHz. Octal PSRAM at 120 MHz is experimental and drifts out of timing as the chip warms up; a core dump showed a single-bit error reading a code constant from PSRAM. To leave enough PSRAM bandwidth for the screen, which streams its frame buffer from PSRAM, the LCD pixel clock is 14 MHz instead of 18.
+- Each release includes `trimet_station_display.elf`. To decode a core dump from a release build, run `idf.py coredump-info` with that ELF (`esp-coredump info_corefile --core-format raw --core <dump> <elf>`); a local rebuild won't match because of build timestamps.
 
 ### Changes from the upstream template
 - Board set to D1/D1S (upstream defaults to D1L/LoRa)
