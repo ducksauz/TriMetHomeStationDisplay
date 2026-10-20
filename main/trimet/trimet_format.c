@@ -202,6 +202,42 @@ bool trimet_time_in_window(int now_min, int start_min, int end_min)
     return now_min >= start_min || now_min < end_min;   /* wraps past midnight */
 }
 
+/* "v1.2.3" -> 1.2.3 packed into one comparable number; 0 if not a version. */
+static uint32_t version_key(const char *v)
+{
+    uint32_t key = 0;
+
+    if (*v != 'v' && *v != 'V') {
+        return 0;
+    }
+    v++;
+    for (int part = 0; part < 3; part++) {
+        char *end;
+        unsigned long n;
+
+        if (!isdigit((unsigned char)*v)) {
+            return 0;
+        }
+        n = strtoul(v, &end, 10);
+        if (n > 1023 || (part < 2 ? *end != '.' : (*end != '\0' && *end != '-'))) {
+            return 0;
+        }
+        key = key << 10 | (uint32_t)n;
+        v = end + (part < 2);
+    }
+    return key;
+}
+
+bool trimet_version_valid(const char *v)
+{
+    return version_key(v) != 0;
+}
+
+bool trimet_version_is_newer(const char *latest, const char *running)
+{
+    return version_key(latest) > version_key(running);
+}
+
 void trimet_format_time_of_day(int minutes, char *buf, size_t len)
 {
     int h = (minutes / 60) % 24, m = minutes % 60;

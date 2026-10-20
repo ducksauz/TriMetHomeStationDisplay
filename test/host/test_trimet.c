@@ -347,6 +347,36 @@ static void test_time_window(void)
     CHECK_STR(buf, "11:15 PM");
 }
 
+static void test_version(void)
+{
+    /* Local builds are versioned from git describe; even a hash that starts
+     * with digits must not parse as a version. */
+    CHECK(trimet_version_is_newer("v1.1.0", "6b546e6-dirty"));
+    CHECK(trimet_version_is_newer("v1.1.0", "7be3db6"));
+    CHECK(trimet_version_is_newer("v1.1.0", "123.4.5"));     /* no "v" */
+    CHECK(trimet_version_is_newer("v1.1.0", ""));
+    CHECK(trimet_version_is_newer("v1.1.1", "v1.1.0"));
+    CHECK(trimet_version_is_newer("v1.2.0", "v1.1.9"));
+    CHECK(trimet_version_is_newer("v2.0.0", "v1.10.0"));
+    CHECK(trimet_version_is_newer("v1.10.0", "v1.9.0"));     /* numeric, not text */
+    CHECK(!trimet_version_is_newer("v1.1.0", "v1.1.0"));
+    CHECK(!trimet_version_is_newer("v1.0.9", "v1.1.0"));
+    /* git describe after a tag: "v1.1.0-3-gabc1234" is the same release line. */
+    CHECK(!trimet_version_is_newer("v1.1.0", "v1.1.0-3-gabc1234"));
+    CHECK(trimet_version_is_newer("v1.1.1", "v1.1.0-3-gabc1234"));
+    /* A bad version file never counts as newer. */
+    CHECK(!trimet_version_is_newer("garbage", "6b546e6-dirty"));
+    CHECK(!trimet_version_is_newer("v1.1", "6b546e6-dirty"));
+
+    CHECK(trimet_version_valid("v1.1.0"));
+    CHECK(trimet_version_valid("V0.0.1"));
+    CHECK(!trimet_version_valid("v0.0.0"));
+    CHECK(!trimet_version_valid("6b546e6-dirty"));
+    CHECK(!trimet_version_valid("v1.1"));
+    CHECK(!trimet_version_valid("v1.1.0x"));
+    CHECK(!trimet_version_valid("v1..0"));
+}
+
 int main(void)
 {
     test_fixture();
@@ -360,6 +390,7 @@ int main(void)
     test_parse_id_list();
     test_select_and_eta();
     test_time_window();
+    test_version();
 
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;

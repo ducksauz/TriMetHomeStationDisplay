@@ -17,6 +17,7 @@
 #include "sdkconfig.h"
 
 #include "trimet_client.h"
+#include "trimet_format.h"
 
 #define VERSION_FILE        "version.txt"
 #define IMAGE_FILE          "trimet_station_display.bin"
@@ -59,27 +60,6 @@ void trimet_ota_get(trimet_ota_status_t *out)
 const char *trimet_ota_running_version(void)
 {
     return esp_app_get_description()->version;
-}
-
-/* Parse "v1.2.3" (or "1.2.3", with anything after it). Local builds without
- * a release tag have versions like "6b546e6-dirty", which parse as 0.0.0,
- * so any release counts as newer. */
-static unsigned long version_key(const char *v)
-{
-    unsigned major = 0, minor = 0, patch = 0;
-
-    if (*v == 'v' || *v == 'V') {
-        v++;
-    }
-    if (sscanf(v, "%u.%u.%u", &major, &minor, &patch) < 1) {
-        return 0;
-    }
-    return (major & 0x3FF) << 20 | (minor & 0x3FF) << 10 | (patch & 0x3FF);
-}
-
-static bool is_newer(const char *latest, const char *running)
-{
-    return version_key(latest) > version_key(running);
 }
 
 /* ---- check ---- */
@@ -139,13 +119,14 @@ static void check_task(void *arg)
     } else if (status != 200) {
         snprintf(msg, sizeof(msg), "Check failed: HTTP %d", status);
         set_state(TRIMET_OTA_ERROR, msg);
-    } else if (version_key(body.buf) == 0) {
+    } else if (!trimet_version_valid(body.buf)) {
         set_state(TRIMET_OTA_ERROR, "Check failed: bad version file");
     } else {
         xSemaphoreTake(s_mutex, portMAX_DELAY);
         strlcpy(s_status.latest, body.buf, sizeof(s_status.latest));
         xSemaphoreGive(s_mutex);
-        set_state(is_newer(body.buf, trimet_ota_running_version()) ? TRIMET_OTA_AVAILABLE : TRIMET_OTA_UP_TO_DATE, NULL);
+        set_state(trimet_version_is_newer(body.buf, trimet_ota_running_version()) ? TRIMET_OTA_AVAILABLE
+                                                                                   : TRIMET_OTA_UP_TO_DATE, NULL);
     }
     ESP_LOGI(TAG, "check: running %s, latest %s (%s)", trimet_ota_running_version(),
              body.buf[0] ? body.buf : "?", err == ESP_OK ? "ok" : esp_err_to_name(err));

@@ -67,6 +67,17 @@ bool trimet_time_in_window(int now_min, int start_min, int end_min);
 /* Minutes since midnight -> "10:00 PM". */
 void trimet_format_time_of_day(int minutes, char *buf, size_t len);
 
+/*
+ * True if release version latest ("v1.2.0") is newer than running. Only a
+ * full "vX.Y.Z" (optionally followed by "-...") counts as a version; anything
+ * else, like a local build's "6b546e6-dirty", is treated as 0.0.0, so every
+ * release is newer than it.
+ */
+bool trimet_version_is_newer(const char *latest, const char *running);
+
+/* True if v is a full "vX.Y.Z" version as above. */
+bool trimet_version_valid(const char *v);
+
 #ifdef __cplusplus
 }
 #endif
