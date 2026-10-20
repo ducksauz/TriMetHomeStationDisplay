@@ -597,7 +597,10 @@ static void fw_timer_cb(lv_timer_t *t)
         lv_label_set_text_fmt(s_fw_btn_label, "Install %s", st.latest);
         break;
     case TRIMET_OTA_DOWNLOADING:
-        lv_label_set_text_fmt(s_fw_status, "Downloading %s... %d%%", st.latest, st.progress);
+        /* The download and flash writes compete with the display for PSRAM
+         * bandwidth, so the screen may flicker. */
+        lv_label_set_text_fmt(s_fw_status, "Downloading %s... %d%%\nScreen flicker during download is normal.",
+                              st.latest, st.progress);
         lv_bar_set_value(s_fw_bar, st.progress, LV_ANIM_OFF);
         lv_obj_clear_flag(s_fw_bar, LV_OBJ_FLAG_HIDDEN);
         button = false;
