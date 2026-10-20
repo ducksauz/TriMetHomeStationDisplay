@@ -64,6 +64,7 @@
 - [ ] Confirm no unexpected restarts over a day or two at 80 MHz (Settings shows the count; it was 4 before this)
 - [x] Free internal RAM: LVGL allocations and the poll/update-check task stacks in PSRAM, Wi-Fi IRAM opts and SoftAP/Enterprise/OWE off, IPC stacks 2 KB. Free internal RAM at boot 25 -> 55 KB, low point during an update check 7.4 -> 27 KB. Health log now reports heap at boot/first arrivals and task stack high-water marks hourly
 - [ ] Optional: shrink lvgl_task (16 KB, ~3.2 KB used) and view_event_task (10 KB, ~2.3 KB used) stacks once high-water marks are measured after using the settings screens
+- [ ] Firmware screen: while downloading, note that some screen flicker is expected (flash writes and TLS compete with the display for PSRAM bandwidth)
 - [x] OTA updates: Settings > Firmware checks the latest GitHub release and installs it; rollback if the new image restarts within 5 min or never fetches arrivals
 - [x] appID entered on the device only (never compiled in); arrivals screen asks for it when missing or rejected
 - [x] Release workflow: tag v* builds and publishes app .bin, version.txt and a full flash image
