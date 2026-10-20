@@ -469,7 +469,7 @@ static void add_pages(const char *title, trimet_mode_t mode, const char *stop_id
 static void init_pages(void)
 {
     add_pages("Streetcar", TRIMET_MODE_STREETCAR, CONFIG_TRIMET_STREETCAR_STOP_IDS);
-    add_pages("Max Light Rail", TRIMET_MODE_LIGHT_RAIL, CONFIG_TRIMET_MAX_STOP_IDS);
+    add_pages("MAX Light Rail", TRIMET_MODE_LIGHT_RAIL, CONFIG_TRIMET_MAX_STOP_IDS);
     s_page = 0;
 }
 
