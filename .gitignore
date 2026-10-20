@@ -20,3 +20,6 @@ sdkconfig.secrets
 bin/
 *.o
 *.pyc
+
+# clangd index
+.cache/
