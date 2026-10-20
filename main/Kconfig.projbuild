@@ -1,14 +1,5 @@
 menu "TriMet Station Display"
 
-    config TRIMET_APP_ID
-        string "TriMet appID"
-        default ""
-        help
-            Developer appID from https://developer.trimet.org/appid/registration/.
-            This is a secret: it is stored in sdkconfig, which is git-ignored.
-            Do not put it in sdkconfig.defaults. Can be left empty and entered
-            on the device instead (Settings > TriMet), which overrides it.
-
     config TRIMET_STREETCAR_STOP_IDS
         string "Streetcar stop IDs (comma-separated)"
         default "10772,10754"
@@ -62,6 +53,14 @@ menu "TriMet Station Display"
             IP-based time zone lookup, which uses a fixed UTC offset that
             does not follow DST changes. Leave empty to use the template's
             lookup.
+
+    config TRIMET_OTA_URL
+        string "Firmware update URL (folder)"
+        default "https://github.com/ducksauz/TriMetHomeStationDisplay/releases/latest/download"
+        help
+            Settings > Firmware fetches version.txt and trimet_station_display.bin
+            from this HTTPS folder. The default is the latest GitHub release,
+            which the release workflow (.github/workflows/release.yml) publishes.
 
     config TRIMET_STALE_RESTART_MIN
         int "Restart after this many minutes without arrivals (0 = never)"

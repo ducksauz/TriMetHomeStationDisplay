@@ -14,6 +14,7 @@
 #include "trimet_dimmer.h"
 #include "trimet_format.h"
 #include "trimet_health.h"
+#include "trimet_ota.h"
 
 #define SCREEN_W      480
 #define MARGIN        16
@@ -35,7 +36,7 @@ static lv_obj_t *s_back_target;
 static lv_obj_t *s_wifi_value;
 static lv_obj_t *s_dim_value;
 static lv_obj_t *s_trimet_value;
-static lv_obj_t *s_health;
+static lv_obj_t *s_fw_value;
 
 /* Night dimming screen */
 static lv_obj_t *s_dim_scr;
@@ -51,9 +52,18 @@ static lv_obj_t *s_appid_value;
 static lv_obj_t *s_poll_choice;
 static lv_obj_t *s_rotate_choice;
 
+/* Firmware screen */
+static lv_obj_t *s_fw_scr;
+static lv_obj_t *s_fw_status;
+static lv_obj_t *s_fw_btn;
+static lv_obj_t *s_fw_btn_label;
+static lv_obj_t *s_fw_bar;
+static lv_obj_t *s_health;
+
 /* App ID screen */
 static lv_obj_t *s_appid_scr;
 static lv_obj_t *s_appid_ta;
+static lv_obj_t *s_appid_return;   /* where back/save go */
 
 static lv_obj_t *make_label(lv_obj_t *parent, const lv_font_t *font, uint32_t color, const char *text)
 {
@@ -359,7 +369,7 @@ static void dim_cb(lv_event_t *e)
 
 static void appid_close(void)
 {
-    _ui_screen_change(s_trimet_scr, LV_SCR_LOAD_ANIM_MOVE_RIGHT, ANIM_MS, 0);
+    _ui_screen_change(s_appid_return, LV_SCR_LOAD_ANIM_MOVE_RIGHT, ANIM_MS, 0);
 }
 
 static void appid_back_cb(lv_event_t *e)
@@ -408,8 +418,7 @@ static void build_appid_screen(void)
     lv_obj_add_state(s_appid_ta, LV_STATE_FOCUSED);   /* show the cursor */
 
     l = make_label(s_appid_scr, &lv_font_montserrat_16, COLOR_DIM,
-                   strlen(CONFIG_TRIMET_APP_ID) ? "From developer.trimet.org. Clear it to use the built-in ID."
-                                                : "From developer.trimet.org.");
+                   "Register for one at developer.trimet.org/appid");
     lv_obj_set_width(l, SCREEN_W - 2 * MARGIN);
     lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_pos(l, MARGIN, 150);
@@ -507,6 +516,7 @@ static void trimet_back_cb(lv_event_t *e)
 
 static void appid_cb(lv_event_t *e)
 {
+    s_appid_return = s_trimet_scr;
     _ui_screen_change(s_appid_scr, LV_SCR_LOAD_ANIM_MOVE_LEFT, ANIM_MS, 0);
 }
 
@@ -539,6 +549,140 @@ static void trimet_cb(lv_event_t *e)
     _ui_screen_change(s_trimet_scr, LV_SCR_LOAD_ANIM_MOVE_LEFT, ANIM_MS, 0);
 }
 
+/* ---- firmware screen ---- */
+
+static void fw_btn_cb(lv_event_t *e)
+{
+    trimet_ota_status_t st;
+
+    trimet_ota_get(&st);
+    if (st.state == TRIMET_OTA_AVAILABLE) {
+        trimet_ota_install();
+    } else {
+        trimet_ota_check();
+    }
+}
+
+/* Runs every 250 ms; only does work while the screen is shown. */
+static void fw_timer_cb(lv_timer_t *t)
+{
+    trimet_ota_status_t st;
+    char bad[TRIMET_OTA_VERSION_LEN];
+    bool button = true;
+
+    if (lv_scr_act() != s_fw_scr) {
+        return;
+    }
+    trimet_ota_get(&st);
+    lv_obj_add_flag(s_fw_bar, LV_OBJ_FLAG_HIDDEN);
+    lv_label_set_text(s_fw_btn_label, "Check for update");
+
+    switch (st.state) {
+    case TRIMET_OTA_IDLE:
+        if (trimet_ota_rolled_back(bad, sizeof(bad))) {
+            lv_label_set_text_fmt(s_fw_status, "Update to %s failed and was undone.", bad);
+        } else {
+            lv_label_set_text(s_fw_status, "");
+        }
+        break;
+    case TRIMET_OTA_CHECKING:
+        lv_label_set_text(s_fw_status, "Checking...");
+        button = false;
+        break;
+    case TRIMET_OTA_UP_TO_DATE:
+        lv_label_set_text_fmt(s_fw_status, "Up to date (latest is %s).", st.latest);
+        break;
+    case TRIMET_OTA_AVAILABLE:
+        lv_label_set_text_fmt(s_fw_status, "%s is available.", st.latest);
+        lv_label_set_text_fmt(s_fw_btn_label, "Install %s", st.latest);
+        break;
+    case TRIMET_OTA_DOWNLOADING:
+        lv_label_set_text_fmt(s_fw_status, "Downloading %s... %d%%", st.latest, st.progress);
+        lv_bar_set_value(s_fw_bar, st.progress, LV_ANIM_OFF);
+        lv_obj_clear_flag(s_fw_bar, LV_OBJ_FLAG_HIDDEN);
+        button = false;
+        break;
+    case TRIMET_OTA_RESTARTING:
+        lv_label_set_text(s_fw_status, "Installed. Restarting...");
+        button = false;
+        break;
+    case TRIMET_OTA_ERROR:
+        lv_label_set_text(s_fw_status, st.error);
+        lv_label_set_text(s_fw_btn_label, "Try again");
+        break;
+    }
+    if (button) {
+        lv_obj_clear_flag(s_fw_btn, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(s_fw_btn, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+static void fw_loaded_cb(lv_event_t *e)
+{
+    update_health();
+    fw_timer_cb(NULL);
+}
+
+static void fw_back_cb(lv_event_t *e)
+{
+    _ui_screen_change(s_scr, LV_SCR_LOAD_ANIM_MOVE_RIGHT, ANIM_MS, 0);
+}
+
+static void build_fw_screen(void)
+{
+    lv_obj_t *l;
+
+    s_fw_scr = make_screen();
+    lv_obj_add_event_cb(s_fw_scr, fw_loaded_cb, LV_EVENT_SCREEN_LOAD_START, NULL);
+    make_back_button(s_fw_scr, fw_back_cb);
+
+    l = make_label(s_fw_scr, &lv_font_montserrat_32, COLOR_TEXT, "Firmware");
+    lv_obj_align(l, LV_ALIGN_TOP_MID, 0, 20);
+
+    l = make_label(s_fw_scr, &lv_font_montserrat_22, COLOR_TEXT, "");
+    lv_label_set_text_fmt(l, "Version %s", trimet_ota_running_version());
+    lv_obj_set_width(l, SCREEN_W - 2 * MARGIN);
+    lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_pos(l, MARGIN, 100);
+
+    s_fw_status = make_label(s_fw_scr, &lv_font_montserrat_18, COLOR_DIM, "");
+    lv_label_set_long_mode(s_fw_status, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(s_fw_status, SCREEN_W - 2 * MARGIN);
+    lv_obj_set_style_text_align(s_fw_status, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_pos(s_fw_status, MARGIN, 144);
+
+    s_fw_bar = lv_bar_create(s_fw_scr);
+    lv_obj_set_size(s_fw_bar, SCREEN_W - 4 * MARGIN, 16);
+    lv_obj_set_pos(s_fw_bar, 2 * MARGIN, 210);
+    lv_bar_set_range(s_fw_bar, 0, 100);
+    lv_obj_set_style_bg_color(s_fw_bar, lv_color_hex(COLOR_ITEM), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_fw_bar, lv_color_hex(COLOR_ACCENT), LV_PART_INDICATOR);
+    lv_obj_add_flag(s_fw_bar, LV_OBJ_FLAG_HIDDEN);
+
+    s_fw_btn = lv_btn_create(s_fw_scr);
+    lv_obj_set_size(s_fw_btn, 280, 64);
+    lv_obj_align(s_fw_btn, LV_ALIGN_TOP_MID, 0, 250);
+    lv_obj_set_style_radius(s_fw_btn, 10, 0);
+    lv_obj_set_style_shadow_width(s_fw_btn, 0, 0);
+    lv_obj_set_style_bg_color(s_fw_btn, lv_color_hex(COLOR_ACCENT), 0);
+    lv_obj_add_event_cb(s_fw_btn, fw_btn_cb, LV_EVENT_CLICKED, NULL);
+    s_fw_btn_label = make_label(s_fw_btn, &lv_font_montserrat_22, COLOR_TEXT, "Check for update");
+    lv_obj_center(s_fw_btn_label);
+
+    s_health = make_label(s_fw_scr, &lv_font_montserrat_16, COLOR_DIM, "");
+    lv_obj_set_width(s_health, SCREEN_W - 2 * MARGIN);
+    lv_obj_set_style_text_align(s_health, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(s_health, LV_ALIGN_BOTTOM_MID, 0, -24);
+
+    lv_timer_create(fw_timer_cb, 250, NULL);
+}
+
+static void fw_cb(lv_event_t *e)
+{
+    _ui_screen_change(s_fw_scr, LV_SCR_LOAD_ANIM_MOVE_LEFT, ANIM_MS, 0);
+}
+
 /* ---- settings screen ---- */
 
 static void back_cb(lv_event_t *e)
@@ -558,7 +702,7 @@ static void screen_loaded_cb(lv_event_t *e)
     update_wifi_value();
     update_dim_value();
     update_appid_value(s_trimet_value);
-    update_health();
+    lv_label_set_text(s_fw_value, trimet_ota_running_version());
 }
 
 void trimet_settings_init(lv_obj_t *back_target)
@@ -577,17 +721,20 @@ void trimet_settings_init(lv_obj_t *back_target)
     s_wifi_value = make_item(s_scr, 0, LV_SYMBOL_WIFI, "Wi-Fi", wifi_cb);
     s_dim_value = make_item(s_scr, 1, LV_SYMBOL_EYE_CLOSE, "Night dimming", dim_cb);
     s_trimet_value = make_item(s_scr, 2, LV_SYMBOL_GPS, "TriMet", trimet_cb);
-
-    s_health = make_label(s_scr, &lv_font_montserrat_16, COLOR_DIM, "");
-    lv_obj_set_width(s_health, SCREEN_W - 2 * MARGIN);
-    lv_obj_set_style_text_align(s_health, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(s_health, LV_ALIGN_BOTTOM_MID, 0, -24);
+    s_fw_value = make_item(s_scr, 3, LV_SYMBOL_DOWNLOAD, "Firmware", fw_cb);
 
     build_dim_screen();
     build_trimet_screen();
+    build_fw_screen();
 }
 
 void trimet_settings_open(void)
 {
     _ui_screen_change(s_scr, LV_SCR_LOAD_ANIM_MOVE_LEFT, ANIM_MS, 0);
+}
+
+void trimet_settings_open_app_id(void)
+{
+    s_appid_return = s_back_target;
+    _ui_screen_change(s_appid_scr, LV_SCR_LOAD_ANIM_MOVE_LEFT, ANIM_MS, 0);
 }

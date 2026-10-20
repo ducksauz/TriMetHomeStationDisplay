@@ -1,0 +1,50 @@
+# Builds the firmware for a version tag and publishes a GitHub release that
+# devices update from (Settings > Firmware > Check for update).
+#
+#   git tag v1.1.0 && git push origin v1.1.0
+#
+# Release files:
+#   trimet_station_display.bin       app image, used by OTA updates
+#   version.txt                      the tag, checked by devices for a newer version
+#   trimet_station_display_full.bin  bootloader + partition table + app, for a
+#                                    first install over USB at offset 0x0
+#
+# The build uses only sdkconfig.defaults, so it contains no TriMet appID:
+# that is entered on the device and kept in NVS.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ESP-IDF takes the firmware version (PROJECT_VER) from version.txt.
+      - name: Set version
+        run: echo "${GITHUB_REF_NAME}" > version.txt
+
+      - name: Build
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.1.7
+          target: esp32s3
+          command: >-
+            idf.py build &&
+            cd build &&
+            esptool.py --chip esp32s3 merge_bin -o trimet_station_display_full.bin @flash_args
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/trimet_station_display.bin
+            build/trimet_station_display_full.bin
+            version.txt
+          generate_release_notes: true

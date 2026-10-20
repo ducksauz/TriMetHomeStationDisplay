@@ -39,6 +39,7 @@
 #define COLOR_WARN      0xF0A030
 #define COLOR_ERROR     0xE5534B
 #define COLOR_DOT_OFF   0x3A4048
+#define COLOR_ACCENT    0x1F6FEB
 
 static const char *TAG = "trimet-view";
 
@@ -97,6 +98,9 @@ static lv_obj_t  *s_status;
 static lv_obj_t  *s_legend;
 static lv_obj_t  *s_dots[MAX_PAGES];
 static lv_timer_t *s_rotate_timer;
+static lv_obj_t  *s_setup;          /* "enter your App ID" panel */
+static lv_obj_t  *s_setup_title;
+static lv_obj_t  *s_setup_body;
 static trimet_arrivals_t *s_data;   /* PSRAM copy of the client's snapshot */
 
 /* ---- small helpers ---- */
@@ -240,7 +244,7 @@ static void render_status(bool have_data, const trimet_client_status_t *st)
     bool failing = st->state != TRIMET_STATE_OK && st->state != TRIMET_STATE_IDLE;
 
     if (st->state == TRIMET_STATE_NO_APP_ID) {
-        snprintf(buf, sizeof(buf), "TriMet appID not set: Settings > TriMet");
+        snprintf(buf, sizeof(buf), "No App ID");
         color = COLOR_ERROR;
     } else if (!have_data) {
         if (failing) {
@@ -264,6 +268,33 @@ static void render_status(bool have_data, const trimet_client_status_t *st)
     set_text_color(s_status, color);
 }
 
+/* Without a working appID there is nothing to show but HTTP errors, so ask
+ * for one instead. Returns true if the panel is shown. */
+static bool render_setup(const trimet_client_status_t *st)
+{
+    bool rejected = st->state == TRIMET_STATE_HTTP_ERROR && st->http_status == 403;
+    bool show = rejected || st->state == TRIMET_STATE_NO_APP_ID;
+
+    set_hidden(s_setup, !show);
+    if (!show) {
+        return false;
+    }
+    set_text(s_title, "TriMet");
+    if (rejected) {
+        set_text(s_setup_title, "TriMet rejected the App ID");
+        set_text(s_setup_body, "Check that it was entered correctly.");
+    } else {
+        set_text(s_setup_title, "Enter your TriMet App ID");
+        set_text(s_setup_body, "Arrivals need a free developer App ID.\n"
+                               "Register at developer.trimet.org/appid");
+    }
+    for (int i = 0; i < s_page_count; i++) {
+        set_hidden(s_pages[i].cont, true);
+    }
+    set_hidden(s_legend, true);
+    return true;
+}
+
 static void render(void)
 {
     trimet_client_status_t st;
@@ -271,6 +302,12 @@ static void render(void)
     page_t *page = &s_pages[s_page];
     int64_t now_ms = 0;
     bool any_scheduled = false;
+
+    if (render_setup(&st)) {
+        render_status(have_data, &st);
+        render_clock();
+        return;
+    }
 
     if (have_data) {
         /* Server time now = response time + time elapsed since the fetch. */
@@ -326,6 +363,11 @@ static void rotate_timer_cb(lv_timer_t *t)
 static void cog_event_cb(lv_event_t *e)
 {
     trimet_settings_open();
+}
+
+static void setup_btn_cb(lv_event_t *e)
+{
+    trimet_settings_open_app_id();
 }
 
 static void screen_event_cb(lv_event_t *e)
@@ -458,6 +500,37 @@ void trimet_view_init(void)
 
     for (int i = 0; i < s_page_count; i++) {
         build_page(&s_pages[i]);
+    }
+
+    /* App ID panel, in place of the pages until there is a working appID. */
+    {
+        lv_obj_t *btn, *l;
+
+        s_setup = plain_obj(s_scr);
+        lv_obj_set_pos(s_setup, 0, SECTION_Y0);
+        lv_obj_set_size(s_setup, SCREEN_W, BODY_BOTTOM - SECTION_Y0);
+        lv_obj_add_flag(s_setup, LV_OBJ_FLAG_HIDDEN);
+
+        s_setup_title = make_label(s_setup, &lv_font_montserrat_26, COLOR_TEXT);
+        lv_obj_set_width(s_setup_title, SCREEN_W - 2 * MARGIN);
+        lv_obj_set_style_text_align(s_setup_title, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_align(s_setup_title, LV_ALIGN_TOP_MID, 0, 70);
+
+        s_setup_body = make_label(s_setup, &lv_font_montserrat_18, COLOR_SUBTLE);
+        lv_obj_set_width(s_setup_body, SCREEN_W - 2 * MARGIN);
+        lv_obj_set_style_text_align(s_setup_body, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_align(s_setup_body, LV_ALIGN_TOP_MID, 0, 124);
+
+        btn = lv_btn_create(s_setup);
+        lv_obj_set_size(btn, 240, 64);
+        lv_obj_align(btn, LV_ALIGN_TOP_MID, 0, 210);
+        lv_obj_set_style_radius(btn, 10, 0);
+        lv_obj_set_style_shadow_width(btn, 0, 0);
+        lv_obj_set_style_bg_color(btn, lv_color_hex(COLOR_ACCENT), 0);
+        lv_obj_add_event_cb(btn, setup_btn_cb, LV_EVENT_CLICKED, NULL);
+        l = make_label(btn, &lv_font_montserrat_22, COLOR_TEXT);
+        lv_label_set_text(l, "Enter App ID");
+        lv_obj_center(l);
     }
 
     s_status = make_label(s_scr, &lv_font_montserrat_14, COLOR_DIM);

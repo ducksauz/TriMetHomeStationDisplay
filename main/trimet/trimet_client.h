@@ -47,6 +47,11 @@ bool trimet_client_get(trimet_arrivals_t *out, trimet_client_status_t *status);
 /* Wake the polling task to fetch now (e.g. on user request). */
 void trimet_client_refresh(void);
 
+/* Stop fetching (e.g. during a firmware update, to keep a second TLS
+ * connection's memory free); false resumes with a fetch. Pausing blocks until
+ * a fetch in progress has finished. */
+void trimet_client_pause(bool pause);
+
 #ifdef __cplusplus
 }
 #endif

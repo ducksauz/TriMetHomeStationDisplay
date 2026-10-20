@@ -15,7 +15,7 @@
 
 static const char *TAG = "trimet-cfg";
 
-/* Saved in NVS. An empty app_id means "use CONFIG_TRIMET_APP_ID". */
+/* Saved in NVS. */
 typedef struct {
     char    app_id[TRIMET_APP_ID_LEN];
     int16_t poll_sec;
@@ -81,15 +81,14 @@ esp_err_t trimet_config_init(void)
     }
     /* Never log the appID itself. */
     ESP_LOGI(TAG, "appID %s, poll every %d s, page every %d s",
-             s_cfg.app_id[0] ? "from settings" : (strlen(CONFIG_TRIMET_APP_ID) ? "from Kconfig" : "not set"),
-             s_cfg.poll_sec, s_cfg.rotate_sec);
+             s_cfg.app_id[0] ? "set" : "not set", s_cfg.poll_sec, s_cfg.rotate_sec);
     return ESP_OK;
 }
 
 void trimet_config_get_app_id(char *buf, size_t len)
 {
     lock();
-    strlcpy(buf, s_cfg.app_id[0] ? s_cfg.app_id : CONFIG_TRIMET_APP_ID, len);
+    strlcpy(buf, s_cfg.app_id, len);
     unlock();
 }
 

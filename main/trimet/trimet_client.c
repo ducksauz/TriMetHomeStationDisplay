@@ -32,12 +32,14 @@
 static const char *TAG = "trimet";
 
 static SemaphoreHandle_t        s_mutex;
+static SemaphoreHandle_t        s_fetch_lock;   /* held during a fetch */
 static TaskHandle_t             s_task;
 static trimet_arrivals_t       *s_latest;   /* last good result, guarded by s_mutex */
 static trimet_arrivals_t       *s_work;     /* poll task scratch */
 static trimet_client_status_t   s_status;   /* guarded by s_mutex */
 static bool                     s_have_data;
 static volatile bool            s_have_ip;  /* station has an IP address */
+static volatile bool            s_paused;   /* trimet_client_pause() */
 
 static const char *state_name(trimet_state_t s)
 {
@@ -196,7 +198,7 @@ static void log_arrivals(const trimet_arrivals_t *a)
 static void poll_task(void *arg)
 {
     uint32_t retry_ms = RETRY_MIN_MS;
-    TickType_t wait = portMAX_DELAY;   /* until the station gets an IP */
+    TickType_t wait = 0;   /* check the appID right away, even before there is an IP */
 
     for (;;) {
         trimet_state_t state;
@@ -206,25 +208,31 @@ static void poll_task(void *arg)
         uint32_t poll_ms;
 
         ulTaskNotifyTake(pdTRUE, wait);
-        if (!s_have_ip) {
-            wait = portMAX_DELAY;
-            continue;
-        }
 
         /* Read each time: both can be changed in Settings > TriMet. */
         poll_ms = trimet_config_get_poll_sec() * 1000;
         trimet_config_get_app_id(app_id, sizeof(app_id));
+        xSemaphoreTake(s_mutex, portMAX_DELAY);
         if (app_id[0] == '\0') {
-            xSemaphoreTake(s_mutex, portMAX_DELAY);
             s_status.state = TRIMET_STATE_NO_APP_ID;
             s_status.http_status = 0;
             strlcpy(s_status.error, "appID not set (Settings > TriMet)", sizeof(s_status.error));
-            xSemaphoreGive(s_mutex);
-            wait = portMAX_DELAY;   /* until trimet_config_set_app_id() calls refresh */
+        } else if (s_status.state == TRIMET_STATE_NO_APP_ID) {
+            s_status.state = TRIMET_STATE_IDLE;   /* just entered; fetch below */
+            s_status.error[0] = '\0';
+        }
+        xSemaphoreGive(s_mutex);
+
+        /* No appID: wait for trimet_config_set_app_id(), which calls refresh.
+         * No IP: wait for the GOT_IP event. Paused: wait for resume. */
+        if (app_id[0] == '\0' || !s_have_ip || s_paused) {
+            wait = portMAX_DELAY;
             continue;
         }
 
+        xSemaphoreTake(s_fetch_lock, portMAX_DELAY);
         state = fetch_once(app_id, s_work, &http_status, err, sizeof(err));
+        xSemaphoreGive(s_fetch_lock);
 
         xSemaphoreTake(s_mutex, portMAX_DELAY);
         s_status.state = state;
@@ -281,9 +289,10 @@ esp_err_t trimet_client_start(void)
     }
 
     s_mutex  = xSemaphoreCreateMutex();
+    s_fetch_lock = xSemaphoreCreateMutex();
     s_latest = heap_caps_calloc(1, sizeof(*s_latest), MALLOC_CAP_SPIRAM);
     s_work   = heap_caps_calloc(1, sizeof(*s_work), MALLOC_CAP_SPIRAM);
-    if (!s_mutex || !s_latest || !s_work) {
+    if (!s_mutex || !s_fetch_lock || !s_latest || !s_work) {
         return ESP_ERR_NO_MEM;
     }
 
@@ -329,6 +338,18 @@ bool trimet_client_get(trimet_arrivals_t *out, trimet_client_status_t *status)
     }
     xSemaphoreGive(s_mutex);
     return have;
+}
+
+void trimet_client_pause(bool pause)
+{
+    s_paused = pause;
+    if (pause && s_fetch_lock) {
+        /* Wait out a fetch in progress. */
+        xSemaphoreTake(s_fetch_lock, portMAX_DELAY);
+        xSemaphoreGive(s_fetch_lock);
+    } else if (!pause) {
+        trimet_client_refresh();
+    }
 }
 
 void trimet_client_refresh(void)

@@ -1,8 +1,9 @@
 /*
  * TriMet settings that can be changed on the device (Settings > TriMet):
  * appID, poll interval and page display time. Saved in NVS; the Kconfig
- * values are the defaults. Readers call the getters each time, so changes
- * apply without a restart.
+ * values are the interval defaults. The appID is only ever entered on the
+ * device, so it is never compiled into a firmware image. Readers call the
+ * getters each time, so changes apply without a restart.
  */
 #ifndef TRIMET_CONFIG_H
 #define TRIMET_CONFIG_H
@@ -34,8 +35,7 @@ void trimet_config_get_app_id(char *buf, size_t len);
 int  trimet_config_get_poll_sec(void);
 int  trimet_config_get_rotate_sec(void);
 
-/* Save a setting. An empty appID reverts to the Kconfig one; out-of-range
- * intervals are clamped to the nearest step. */
+/* Save a setting. Out-of-range intervals are clamped to the nearest step. */
 void trimet_config_set_app_id(const char *app_id);
 void trimet_config_set_poll_sec(int sec);
 void trimet_config_set_rotate_sec(int sec);

@@ -4,6 +4,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_app_desc.h"
 #include "esp_log.h"
 #include "sdkconfig.h"
 #include "bsp_board.h"
@@ -17,12 +18,11 @@
 #include "trimet_config.h"
 #include "trimet_dimmer.h"
 #include "trimet_health.h"
+#include "trimet_ota.h"
 #include "trimet_view.h"
 //#include "indicator_controller.h"
 
 static const char *TAG = "app_main";
-
-#define VERSION   "v1.0.0"
 
 #define SENSECAP  "\n\
    _____                      _________    ____         \n\
@@ -41,7 +41,7 @@ esp_event_loop_handle_t view_event_handle;
 
 void app_main(void)
 {
-    ESP_LOGI("", SENSECAP, VERSION, __DATE__, __TIME__);
+    ESP_LOGI("", SENSECAP, esp_app_get_description()->version, __DATE__, __TIME__);
 
     if (strlen(CONFIG_TRIMET_TZ) > 0) {
         setenv("TZ", CONFIG_TRIMET_TZ, 1);
@@ -77,6 +77,7 @@ void app_main(void)
     }
     trimet_dimmer_init();
     trimet_health_init();
+    trimet_ota_init();
 
     indicator_controller_init();
 

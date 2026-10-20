@@ -60,7 +60,10 @@
 - [x] Verify watchdog build on device (15 min serial capture, no warnings)
 - [x] Fix the overnight reboot/blank screen: hardware SHA/AES DMA and the LCD driver flushed the PSRAM cache from both cores at once and deadlocked (interrupt watchdog); TLS now uses software SHA/AES
 - [ ] Confirm no unexpected restarts over a day or two (Settings shows the count; it was 3 from testing)
-- [ ] Optional: OTA updates
+- [x] OTA updates: Settings > Firmware checks the latest GitHub release and installs it; rollback if the new image restarts within 5 min or never fetches arrivals
+- [x] appID entered on the device only (never compiled in); arrivals screen asks for it when missing or rejected
+- [x] Release workflow: tag v* builds and publishes app .bin, version.txt and a full flash image
+- [ ] Make the repo public, push a first release tag, and test an update and a rollback end to end
 - [ ] Optional: show service alerts/detours via the TriMet Alerts API
 
 ## 6. Docs

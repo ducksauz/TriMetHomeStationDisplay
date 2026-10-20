@@ -116,7 +116,9 @@ static void check_stale(int64_t now_ms)
     const int64_t limit_ms = (int64_t)CONFIG_TRIMET_STALE_RESTART_MIN * 60 * 1000;
 
     trimet_client_get(NULL, &st);
-    if (st.state == TRIMET_STATE_NO_APP_ID) {
+    /* A restart cannot fix a missing or rejected appID. */
+    if (st.state == TRIMET_STATE_NO_APP_ID ||
+        (st.state == TRIMET_STATE_HTTP_ERROR && st.http_status == 403)) {
         return;
     }
     /* last_ok_uptime_ms is 0 before the first success, so this also covers

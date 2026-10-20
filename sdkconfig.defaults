@@ -108,3 +108,7 @@ CONFIG_ESP_PANIC_HANDLER_IRAM=y
 # USB with 'idf.py coredump-info'.
 CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
 CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+
+# Firmware updates (Settings > Firmware). A new image must prove itself
+# (trimet_ota.c) or the bootloader goes back to the previous one.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y

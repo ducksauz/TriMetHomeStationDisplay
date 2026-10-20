@@ -1,7 +1,7 @@
 /*
  * Settings screen, opened from the cog on the arrivals screen: Wi-Fi (the
  * template's setup screen), night dimming, TriMet (appID, poll interval,
- * page time), and uptime/restart diagnostics.
+ * page time), and Firmware (version, updates, uptime/restart diagnostics).
  */
 #ifndef TRIMET_SETTINGS_H
 #define TRIMET_SETTINGS_H
@@ -18,6 +18,10 @@ void trimet_settings_init(lv_obj_t *back_target);
 
 /* Show the settings screen. Call from the LVGL task. */
 void trimet_settings_open(void);
+
+/* Show the App ID entry screen; back/save return to the arrivals screen.
+ * Call from the LVGL task. */
+void trimet_settings_open_app_id(void);
 
 #ifdef __cplusplus
 }

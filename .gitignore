@@ -23,3 +23,6 @@ bin/
 
 # clangd index
 .cache/
+
+# Release version, written by the release workflow (ESP-IDF reads it as PROJECT_VER)
+/version.txt
