@@ -68,4 +68,4 @@
 
 ## 6. Docs
 - [x] Complete the README with real build/flash steps
-- [ ] Add photos/screenshots to the README
+- [x] Add a demo GIF to the README (images/demo.gif)

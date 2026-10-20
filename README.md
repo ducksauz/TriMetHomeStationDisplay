@@ -2,6 +2,10 @@
 
 A small always-on display that shows live arrival times for the Portland Streetcar and MAX light rail at stops in my neighborhood (Pearl District / Old Town, near Union Station). It uses the TriMet Arrivals V2 web service.
 
+<p align="center">
+  <img src="images/demo.gif" width="400" alt="The display rotating through the Streetcar page and two MAX pages, showing line badges, destinations and minutes until each arrival">
+</p>
+
 ## Hardware
 
 | Item | Detail |
